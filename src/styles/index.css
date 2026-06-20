@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: #060708;
+    color: #e9e7e2;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  ::selection {
+    background: rgba(232, 216, 168, 0.28);
+    color: #fff;
+  }
+}
+
+@layer components {
+  /* Glass surface used sparingly for floating panels and controls */
+  .glass {
+    background: rgba(18, 20, 22, 0.55);
+    backdrop-filter: blur(18px) saturate(120%);
+    -webkit-backdrop-filter: blur(18px) saturate(120%);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .glass-strong {
+    background: rgba(12, 13, 15, 0.82);
+    backdrop-filter: blur(26px) saturate(120%);
+    -webkit-backdrop-filter: blur(26px) saturate(120%);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  /* Quiet uppercase label used for UI metadata */
+  .eyebrow {
+    font-family: 'Inter', system-ui, sans-serif;
+    text-transform: uppercase;
+    letter-spacing: 0.32em;
+    font-size: 0.62rem;
+    font-weight: 500;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center rounded-full px-5 py-2.5 text-sm font-medium transition-all duration-500 ease-luxe;
+    color: rgba(233, 231, 226, 0.82);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-ghost:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.28);
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+@layer utilities {
+  .paper-grain {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E");
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  /* Thin, unobtrusive scrollbar for drawers */
+  .scroll-quiet::-webkit-scrollbar {
+    width: 8px;
+  }
+  .scroll-quiet::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+  }
+  .scroll-quiet::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
