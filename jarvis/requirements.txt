@@ -51,8 +51,9 @@ pytest>=8.0
 #                            # elevated privileges on some systems. Optional -
 #                            # without it, the in-app focus shortcut still works.
 
-# --- Wake word (experimental, disabled by default) --------------------------
-# openwakeword>=0.6
+# --- Wake word (experimental, disabled by default, fully offline) -----------
+# openwakeword>=0.6          # local "Hey Jarvis" detection (needs sounddevice+numpy)
+#                            # audio is processed on-device; never sent to the cloud
 
 # --- Gmail / Google Calendar (Phase 6) --------------------------------------
 # google-api-python-client>=2.130

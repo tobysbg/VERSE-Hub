@@ -59,7 +59,13 @@ def main() -> int:
         print(f"Could not create the main window: {exc}")
         return 1
 
-    window.show()
+    if settings.start_minimized and settings.minimize_to_tray:
+        # Start hidden in the tray when requested (and a tray is configured).
+        window.hide()
+    else:
+        window.show()
+        if settings.start_minimized:
+            window.showMinimized()
     return app.exec()
 
 

@@ -37,6 +37,9 @@ _SETTING_KEYS = [
     "minimize_to_tray",
     "global_hotkey_enabled",
     "wake_word_enabled",
+    "wake_phrase",
+    "start_minimized",
+    "start_with_windows",
     "developer_mode",
     "screenshot_logging",
 ]
@@ -85,8 +88,12 @@ class Settings(BaseModel):
     minimize_to_tray: bool = True
     global_hotkey_enabled: bool = True
     # Wake word is an experimental, disabled-by-default feature. It is only ever
-    # active when the user explicitly turns it on AND a local backend exists.
+    # active when the user explicitly turns it on AND a local backend exists AND
+    # voice is enabled. Detection is fully offline (no audio sent to the cloud).
     wake_word_enabled: bool = False
+    wake_phrase: str = "Hey Jarvis"
+    start_minimized: bool = False
+    start_with_windows: bool = False  # OFF by default; never auto-enabled
 
     # --- Developer / advanced ------------------------------------------------
     # When True, "blocked" categories may be attempted (still confirmation-gated).

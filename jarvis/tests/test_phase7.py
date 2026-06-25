@@ -43,11 +43,13 @@ def test_phase7_settings_persist(tmp_path):
     db.close()
 
 
-def test_wake_word_remains_disabled_experimental():
-    from jarvis.voice.wake_word import WakeWordDetector
+def test_wake_word_engine_is_graceful_without_backend():
+    from jarvis.voice.wake_word import WakeWordEngine
 
-    # Even when asked to enable, there is no always-on backend in this build.
-    det = WakeWordDetector(enabled=True)
-    assert det.is_available() is False
-    assert det.start(lambda: None) is False
-    assert det.running is False
+    eng = WakeWordEngine()
+    assert isinstance(eng.available(), bool)
+    assert eng.running is False
+    if not eng.available():
+        ok, msg = eng.start(lambda: None)
+        assert ok is False
+        assert "pip install openwakeword" in msg

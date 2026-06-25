@@ -326,8 +326,17 @@ fake LLM provider, no network needed).
   installed (`pip install keyboard`), this summons JARVIS even when it's
   minimized or unfocused. Without it, the in-app `Ctrl+Shift+J` shortcut still
   works while the window has focus.
-- **Wake word ("Hey JARVIS"):** present only as a **disabled, experimental**
-  setting — there is no always-on microphone in this build.
+- **Wake word ("Hey Jarvis"):** an **experimental, opt-in, fully offline**
+  feature (default OFF). Install `pip install openwakeword sounddevice numpy`,
+  enable voice, then tick **Enable wake word** (or use the *Start/Stop Listening*
+  button). Detection runs on-device with openWakeWord — **audio is never streamed
+  to OpenAI or any cloud**. While listening, the window title and tray tooltip
+  show "wake listening" (no stealth). On "Hey Jarvis" it restores/focuses the
+  window, sets status to **Listening**, and starts the normal push-to-talk
+  recording. It only runs while JARVIS is open (foreground or tray); fully
+  quitting stops it. It never listens when voice is disabled. *Start with
+  Windows* and *Start minimized to tray* are available in Settings (both OFF by
+  default).
 
 ## Keyboard
 

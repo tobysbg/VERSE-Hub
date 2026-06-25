@@ -133,11 +133,25 @@ class SettingsDialog(QDialog):
         self.global_hotkey.setChecked(settings.global_hotkey_enabled)
         layout.addWidget(self.global_hotkey)
 
+        self.start_minimized = QCheckBox("Start minimized to tray")
+        self.start_minimized.setChecked(settings.start_minimized)
+        layout.addWidget(self.start_minimized)
+
+        self.start_with_windows = QCheckBox("Start JARVIS with Windows")
+        self.start_with_windows.setChecked(settings.start_with_windows)
+        layout.addWidget(self.start_with_windows)
+
         self.wake_word = QCheckBox(
-            "Wake word 'Hey JARVIS' (EXPERIMENTAL - disabled; no always-on mic yet)"
+            "Enable wake word (EXPERIMENTAL, offline; requires voice enabled)"
         )
         self.wake_word.setChecked(settings.wake_word_enabled)
         layout.addWidget(self.wake_word)
+
+        wake_row = QHBoxLayout()
+        wake_row.addWidget(QLabel("Wake phrase"))
+        self.wake_phrase = QLineEdit(settings.wake_phrase)
+        wake_row.addWidget(self.wake_phrase, 1)
+        layout.addLayout(wake_row)
 
         # --- Buttons --------------------------------------------------------
         buttons = QHBoxLayout()
@@ -200,5 +214,8 @@ class SettingsDialog(QDialog):
                 "minimize_to_tray": self.minimize_to_tray.isChecked(),
                 "global_hotkey_enabled": self.global_hotkey.isChecked(),
                 "wake_word_enabled": self.wake_word.isChecked(),
+                "wake_phrase": self.wake_phrase.text().strip() or "Hey Jarvis",
+                "start_minimized": self.start_minimized.isChecked(),
+                "start_with_windows": self.start_with_windows.isChecked(),
             }
         )

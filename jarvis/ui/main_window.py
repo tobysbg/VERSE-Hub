@@ -16,7 +16,7 @@ import os
 import threading
 from typing import Optional
 
-from PySide6.QtCore import QEvent, Qt, QThread, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, QThread, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -51,6 +51,7 @@ from ..voice.diagnostics import format_diagnostics, summary_line, voice_diagnost
 from ..voice.recorder import AudioRecorder
 from ..voice.stt import get_stt_provider
 from ..voice.tts import get_tts_provider
+from ..voice.wake_word import WakeWordEngine
 from .confirm_dialog import ConfirmationDialog
 from .global_hotkey import GlobalHotkey
 from .hud_widgets import RadarWidget, StatusIndicator, WaveformWidget
@@ -174,6 +175,12 @@ class TTSWorker(QThread):
             self.finished_speaking.emit()
 
 
+class WakeBridge(QObject):
+    """Marshals a wake-word detection from the engine thread to the UI thread."""
+
+    detected = Signal()
+
+
 class MainWindow(QWidget):
     def __init__(self, db: Database, settings: Settings) -> None:
         super().__init__()
@@ -189,6 +196,9 @@ class MainWindow(QWidget):
         self._tray: Optional[QSystemTrayIcon] = None
         self._global_hotkey: Optional[GlobalHotkey] = None
         self._force_quit = False
+        self._wake_engine: Optional[WakeWordEngine] = None
+        self._wake_bridge = WakeBridge()
+        self._wake_bridge.detected.connect(self._on_wake_detected)
 
         self.setWindowTitle("JARVIS")
         self.setObjectName("RootBackground")
@@ -200,6 +210,7 @@ class MainWindow(QWidget):
         self._setup_global_hotkey()
         self._refresh_provider_banner()
         self._log_startup_diagnostics()
+        self._maybe_autostart_wake()
 
     # -- UI construction -----------------------------------------------------
     def _build_ui(self) -> None:
@@ -264,6 +275,16 @@ class MainWindow(QWidget):
         layout.addWidget(self.automation_btn)
 
         layout.addStretch(1)
+
+        self.wake_btn = QPushButton("Start Listening (Hey Jarvis)")
+        self.wake_btn.setObjectName("ToggleButton")
+        self.wake_btn.setCheckable(True)
+        self.wake_btn.setToolTip(
+            "Experimental offline wake word. Listens locally for 'Hey Jarvis'; "
+            "audio is never sent to the cloud. Requires voice enabled."
+        )
+        self.wake_btn.clicked.connect(self._toggle_wake)
+        layout.addWidget(self.wake_btn)
 
         self.stop_btn = QPushButton("■  STOP / CANCEL")
         self.stop_btn.setObjectName("StopButton")
@@ -492,6 +513,69 @@ class MainWindow(QWidget):
         self.voice_btn.setText("🎙")
         self.waveform.set_active(False)
 
+    # -- wake word (experimental, offline, off by default) -------------------
+    def _maybe_autostart_wake(self) -> None:
+        if self.settings.wake_word_enabled and self.settings.voice_enabled:
+            self._start_wake(announce=False)
+
+    def _toggle_wake(self) -> None:
+        if self._wake_engine and self._wake_engine.running:
+            self._stop_wake()
+        else:
+            self._start_wake(announce=True)
+
+    def _start_wake(self, announce: bool = True) -> None:
+        # Never listen when the user has voice disabled (requirement 12).
+        if not self.settings.voice_enabled:
+            self.wake_btn.setChecked(False)
+            if announce:
+                self._append_chat(
+                    "System",
+                    "Enable voice in Settings before turning on the wake word.",
+                )
+            return
+        engine = WakeWordEngine(phrase=self.settings.wake_phrase)
+        if not engine.available():
+            self.wake_btn.setChecked(False)
+            self._append_chat("System", engine.setup_message())
+            return
+        ok, err = engine.start(lambda: self._wake_bridge.detected.emit())
+        if not ok:
+            self.wake_btn.setChecked(False)
+            self._append_chat("System", err)
+            return
+        self._wake_engine = engine
+        self.wake_btn.setChecked(True)
+        self.wake_btn.setText("Stop Listening (Hey Jarvis)")
+        self._set_wake_indicator(True)
+        self._on_timeline(f"Wake listening active - say '{self.settings.wake_phrase}'.")
+
+    def _stop_wake(self) -> None:
+        if self._wake_engine is not None:
+            self._wake_engine.stop()
+            self._wake_engine = None
+        self.wake_btn.setChecked(False)
+        self.wake_btn.setText("Start Listening (Hey Jarvis)")
+        self._set_wake_indicator(False)
+        self._on_timeline("Wake listening stopped.")
+
+    def _set_wake_indicator(self, active: bool) -> None:
+        """Visible (non-stealth) indicator that wake listening is on."""
+        if self._tray is not None:
+            self._tray.setToolTip(
+                "JARVIS - wake listening (Hey Jarvis)" if active else "JARVIS"
+            )
+        title = "JARVIS  ●  wake listening" if active else "JARVIS"
+        self.setWindowTitle(title)
+
+    def _on_wake_detected(self) -> None:
+        # Bring JARVIS forward and start the normal push-to-talk flow.
+        self._summon()
+        self.status_indicator.set_status(AgentStatus.LISTENING)
+        self._on_timeline("Wake word detected - listening.")
+        if not (self._voice_worker and self._voice_worker.isRunning()):
+            self._on_voice()
+
     # -- assistant output / spoken responses ---------------------------------
     def _on_assistant_message(self, message: str) -> None:
         self._append_chat("JARVIS", message)
@@ -573,6 +657,7 @@ class MainWindow(QWidget):
     def _open_settings(self) -> None:
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec():
+            previous_autostart = self.settings.start_with_windows
             self.settings = dialog.updated_settings()
             self.settings.save(self.db)
             self.safety.settings = self.settings
@@ -581,6 +666,28 @@ class MainWindow(QWidget):
             self._sync_toggle_text(self.automation_btn, "Automation mode", self.settings.automation_enabled)
             self.automation_btn.setChecked(self.settings.automation_enabled)
             self._refresh_provider_banner()
+            self._reconcile_wake_state()
+            self._apply_autostart_setting(previous_autostart)
+
+    def _reconcile_wake_state(self) -> None:
+        """Start/stop wake listening to match the current settings."""
+        want = self.settings.wake_word_enabled and self.settings.voice_enabled
+        running = bool(self._wake_engine and self._wake_engine.running)
+        if want and not running:
+            self._start_wake(announce=False)
+        elif not want and running:
+            self._stop_wake()
+
+    def _apply_autostart_setting(self, previous: bool) -> None:
+        if self.settings.start_with_windows == previous:
+            return
+        from ..app import autostart
+
+        ok, message = autostart.set_enabled(self.settings.start_with_windows)
+        self._append_chat("System", message)
+        if not ok:
+            # Revert the toggle in-memory so it reflects reality.
+            self.settings.start_with_windows = previous
 
     def _show_history(self) -> None:
         entries = self.db.get_action_log(limit=200)
@@ -713,6 +820,8 @@ class MainWindow(QWidget):
 
         if self._global_hotkey is not None:
             self._global_hotkey.stop()
+        if self._wake_engine is not None:
+            self._wake_engine.stop()  # fully quitting -> stop listening
         if self._worker and self._worker.isRunning():
             self._worker.agent.request_stop()
             self._worker.provide_confirmation(ConfirmDecision.DENY)
