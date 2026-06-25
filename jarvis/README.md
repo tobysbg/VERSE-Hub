@@ -31,7 +31,7 @@ scaffolded as safe, well-typed stubs.
 | Tests (safety, registry, file tools, agent loop) | ✅ working |
 | Voice: push-to-talk STT (OpenAI Whisper) + TTS (pyttsx3) | ✅ working (opt-in) |
 | Wake word / always-on mic | ⛔ intentionally not implemented |
-| Browser automation (Playwright) | 🟡 safe stub |
+| Browser automation — visible Playwright window | ✅ working (opt-in install) |
 | Desktop control (click/type/screenshot/OCR/vision) | 🟡 safe stub, OFF by default |
 | Gmail / Google Calendar | 🟡 safe stub |
 
@@ -205,6 +205,26 @@ the path shown in the diagnostics — e.g.
 `"C:\path\to\jarvis\.venv\Scripts\python.exe" -m pip install sounddevice numpy`
 — and make sure you launch JARVIS from that same activated venv (or via
 `run.bat`).
+
+---
+
+## Browser automation (Phase 4) — visible
+
+Install: `pip install playwright && playwright install chromium`.
+
+The agent drives a **visible** Chromium window (you can watch every action),
+launched with a **separate profile** under `~/.jarvis/browser_profile` — it never
+touches your real browser profile. Tools: `open_url`, `search_web`, `click_text`,
+`fill_field`, `extract_page_text`, `screenshot_page`, `close_browser`.
+
+Safety: navigation/extraction are low risk; **every click and field-fill asks for
+confirmation**, and any text that looks like a login / payment / purchase /
+booking / submission is escalated to **HIGH** (allow-once only). Passwords, 2FA
+codes, and banking pages remain **blocked** by the safety layer. JARVIS stops
+before the final submission and waits for you.
+
+If Playwright isn't installed, the tools show a clear setup message and the rest
+of JARVIS keeps working.
 
 ---
 
