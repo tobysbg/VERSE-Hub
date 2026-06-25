@@ -17,10 +17,7 @@ import time
 import wave
 from typing import Callable, Optional, Tuple
 
-_SETUP_HINT = (
-    "Microphone capture needs the audio backend. Run: "
-    "pip install sounddevice numpy"
-)
+from .diagnostics import audio_backend_message, audio_backend_status
 
 
 class AudioRecorder:
@@ -37,13 +34,13 @@ class AudioRecorder:
         self.block_frames = block_frames
 
     def is_available(self) -> bool:
-        """True if the optional audio backend is importable. Never raises."""
-        try:
-            import numpy  # noqa: F401
-            import sounddevice  # noqa: F401
-            return True
-        except Exception:  # noqa: BLE001 - missing system libs can raise OSError too
-            return False
+        """True if the audio backend imports in THIS interpreter. Never raises."""
+        ok, _errors = audio_backend_status()
+        return ok
+
+    def availability_message(self) -> str:
+        """Detailed reason (names the interpreter + real exception) or 'ready'."""
+        return audio_backend_message()
 
     def record(
         self,
@@ -59,7 +56,7 @@ class AudioRecorder:
             import numpy as np
             import sounddevice as sd
         except Exception:  # noqa: BLE001
-            return None, _SETUP_HINT
+            return None, audio_backend_message()
 
         frames: list = []
         try:

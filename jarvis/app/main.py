@@ -6,6 +6,7 @@ display available), so the import-only parts remain testable on headless CI.
 """
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -23,9 +24,19 @@ def main() -> int:
     from .settings import Settings
     from ..storage.database import Database
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    )
+
     env = get_config()
     db = Database()
     settings = Settings.load(db, env)
+
+    # Log the running interpreter early - the most common voice problem is
+    # JARVIS running under a different Python than the venv where the user
+    # installed sounddevice/numpy.
+    logging.getLogger("jarvis").info("Starting JARVIS with interpreter: %s", sys.executable)
 
     try:
         from PySide6.QtWidgets import QApplication

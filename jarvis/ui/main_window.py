@@ -11,6 +11,7 @@ modal dialog appears on the main thread while the worker waits for the answer.
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 from typing import Optional
@@ -44,6 +45,7 @@ from ..llm.factory import get_provider
 from ..storage.database import Database
 from ..storage.models import AgentStatus, MessageRole
 from ..tools.registry import build_default_registry
+from ..voice.diagnostics import format_diagnostics, summary_line, voice_diagnostics
 from ..voice.recorder import AudioRecorder
 from ..voice.stt import get_stt_provider
 from ..voice.tts import get_tts_provider
@@ -176,6 +178,7 @@ class MainWindow(QWidget):
         self._build_ui()
         self._install_shortcuts()
         self._refresh_provider_banner()
+        self._log_startup_diagnostics()
 
     # -- UI construction -----------------------------------------------------
     def _build_ui(self) -> None:
@@ -313,6 +316,10 @@ class MainWindow(QWidget):
         self.history_btn.clicked.connect(self._show_history)
         layout.addWidget(self.history_btn)
 
+        self.diagnostics_btn = QPushButton("Voice diagnostics")
+        self.diagnostics_btn.clicked.connect(self._show_diagnostics)
+        layout.addWidget(self.diagnostics_btn)
+
         return card
 
     def _install_shortcuts(self) -> None:
@@ -431,11 +438,11 @@ class MainWindow(QWidget):
 
         recorder = AudioRecorder()
         if not recorder.is_available():
-            self._append_chat(
-                "System",
-                "Microphone capture needs the audio backend. Install it with: "
-                "pip install sounddevice numpy",
-            )
+            # Surface the real cause: which interpreter is running and the actual
+            # import exception (env mismatch, PortAudio load error, etc.).
+            message = recorder.availability_message()
+            logging.getLogger("jarvis").warning("Audio backend unavailable:\n%s", message)
+            self._append_chat("System", message)
             return
 
         stt = get_stt_provider(self.settings.stt_provider, self.settings.openai_api_key)
@@ -555,6 +562,27 @@ class MainWindow(QWidget):
         dlg.setWindowTitle("Session History - Action Log")
         dlg.setText("\n".join(lines[:60]))
         dlg.exec()
+
+    # -- diagnostics ---------------------------------------------------------
+    def _log_startup_diagnostics(self) -> None:
+        """Log the voice environment at startup so backend issues are obvious.
+
+        Also writes a one-line summary to the (fresh) timeline. Because the
+        chat/timeline are recreated each launch, any voice error text from a
+        previous run is already gone - this line reflects the CURRENT state.
+        """
+        diag = voice_diagnostics(self.settings)
+        logging.getLogger("jarvis").info(
+            "JARVIS voice diagnostics:\n%s", format_diagnostics(diag)
+        )
+        self._on_timeline(summary_line(diag))
+
+    def _show_diagnostics(self) -> None:
+        diag = voice_diagnostics(self.settings)
+        box = QMessageBox(self)
+        box.setWindowTitle("JARVIS - Voice diagnostics")
+        box.setText(format_diagnostics(diag))
+        box.exec()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         if self._worker and self._worker.isRunning():

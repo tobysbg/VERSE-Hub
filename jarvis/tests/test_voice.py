@@ -124,3 +124,100 @@ def test_new_status_values_exist():
 
     assert AgentStatus.TRANSCRIBING.value == "Transcribing"
     assert AgentStatus.SPEAKING.value == "Speaking"
+
+
+# --------------------------------------------------------------------------- #
+# Diagnostics
+# --------------------------------------------------------------------------- #
+def test_probe_module_reports_success_and_failure():
+    from jarvis.voice.diagnostics import probe_module
+
+    ok, err = probe_module("sys")  # always importable
+    assert ok is True and err == ""
+
+    ok, err = probe_module("a_module_that_does_not_exist_zzz")
+    assert ok is False
+    assert "ModuleNotFoundError" in err or "ImportError" in err
+
+
+def test_audio_backend_status_shape():
+    from jarvis.voice.diagnostics import audio_backend_status
+
+    ok, errors = audio_backend_status()
+    assert isinstance(ok, bool)
+    assert isinstance(errors, list)
+    # When unavailable, there must be a concrete reason for each missing piece.
+    if not ok:
+        assert errors and all(isinstance(e, str) and e for e in errors)
+
+
+def test_audio_backend_message_names_interpreter_when_unavailable():
+    import sys
+
+    from jarvis.voice.diagnostics import audio_backend_message, audio_backend_status
+
+    ok, _ = audio_backend_status()
+    msg = audio_backend_message()
+    if ok:
+        assert msg == "ready"
+    else:
+        # The whole point of the fix: tell the user WHICH interpreter is running.
+        assert sys.executable in msg
+
+
+def test_recorder_availability_message_matches_backend():
+    import sys
+
+    from jarvis.voice.recorder import AudioRecorder
+
+    rec = AudioRecorder()
+    msg = rec.availability_message()
+    if rec.is_available():
+        assert msg == "ready"
+    else:
+        assert sys.executable in msg
+
+
+def test_voice_diagnostics_has_all_required_fields():
+    from jarvis.app.settings import Settings
+    from jarvis.voice.diagnostics import voice_diagnostics
+
+    diag = voice_diagnostics(Settings())
+    for key in (
+        "executable",
+        "numpy_installed",
+        "sounddevice_installed",
+        "stt_configured",
+        "tts_configured",
+    ):
+        assert key in diag
+    assert isinstance(diag["executable"], str) and diag["executable"]
+    assert isinstance(diag["numpy_installed"], bool)
+    assert isinstance(diag["sounddevice_installed"], bool)
+    assert isinstance(diag["stt_configured"], bool)
+    assert isinstance(diag["tts_configured"], bool)
+
+
+def test_format_and_summary_render_without_error():
+    from jarvis.app.settings import Settings
+    from jarvis.voice.diagnostics import (
+        format_diagnostics,
+        summary_line,
+        voice_diagnostics,
+    )
+
+    diag = voice_diagnostics(Settings())
+    block = format_diagnostics(diag)
+    assert "sys.executable" in block
+    assert "numpy installed" in block
+    line = summary_line(diag)
+    assert "Voice diagnostics" in line
+
+
+def test_recorder_is_available_consistent_with_backend_status():
+    """If numpy+sounddevice import, is_available() MUST be True (the bug)."""
+    from jarvis.voice.diagnostics import audio_backend_status
+    from jarvis.voice.recorder import AudioRecorder
+
+    ok, _ = audio_backend_status()
+    assert AudioRecorder().is_available() is ok

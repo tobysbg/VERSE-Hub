@@ -176,6 +176,26 @@ TTS. Optionally tick **Auto-send transcription**.
 If the audio backend or API key is missing, JARVIS shows a clear setup message
 instead of failing silently. Voice speed is configurable in Settings.
 
+### Troubleshooting: "audio backend missing" even though it's installed
+
+This almost always means JARVIS is running under a **different Python
+interpreter** than the virtualenv where you installed `sounddevice`/`numpy`
+(or `import sounddevice` is hitting a PortAudio load error inside the app).
+JARVIS now helps you see this:
+
+- On startup it logs the running interpreter and writes a **Voice diagnostics**
+  line to the action timeline.
+- The **Voice diagnostics** button (right panel) shows `sys.executable`, whether
+  numpy / sounddevice import, and whether STT/TTS are ready.
+- If the mic button can't find the backend, the message names the exact
+  interpreter and the real import exception.
+
+Fix: install the backend into the **same** interpreter that runs JARVIS, using
+the path shown in the diagnostics — e.g.
+`"C:\path\to\jarvis\.venv\Scripts\python.exe" -m pip install sounddevice numpy`
+— and make sure you launch JARVIS from that same activated venv (or via
+`run.bat`).
+
 ---
 
 ## Configuration (`.env`)
