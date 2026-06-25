@@ -31,8 +31,10 @@ _SETTING_KEYS = [
     "voice_enabled",
     "stt_provider",
     "tts_provider",
+    "tts_voice",
     "voice_speed",
     "voice_autosend",
+    "read_responses_aloud",
     "developer_mode",
     "screenshot_logging",
 ]
@@ -58,11 +60,17 @@ class Settings(BaseModel):
     # --- Voice (disabled by default; push-to-talk only, no wake word) --------
     voice_enabled: bool = False
     stt_provider: str = "openai-whisper"
-    tts_provider: str = "pyttsx3"
+    # TTS defaults to 'none' (pyttsx3 quality is poor); Settings.load() upgrades
+    # this to 'edge-tts' on first run if that high-quality backend is installed.
+    tts_provider: str = "none"
+    tts_voice: str = ""  # provider-specific voice id; blank = provider default
     voice_speed: float = Field(default=1.0, ge=0.5, le=2.0)
-    # When True, a finished transcription is sent automatically; otherwise it is
-    # placed in the chat input for the user to review and send.
-    voice_autosend: bool = False
+    # Auto-send a finished transcription (ON by default for a fast assistant
+    # feel). When OFF, the transcript is placed in the input to review and send.
+    voice_autosend: bool = True
+    # Read assistant responses aloud. OFF by default (until a good TTS voice is
+    # selected) so the poor offline voice isn't forced on the user.
+    read_responses_aloud: bool = False
 
     # --- Developer / advanced ------------------------------------------------
     # When True, "blocked" categories may be attempted (still confirmation-gated).
@@ -87,6 +95,17 @@ class Settings(BaseModel):
                 data[key] = stored[key]
         # Drop Nones so pydantic defaults apply where appropriate.
         data = {k: v for k, v in data.items() if v is not None}
+
+        # First run only (no persisted TTS choice): pick the best available
+        # high-quality TTS - edge-tts if installed, otherwise 'none'.
+        if "tts_provider" not in stored:
+            try:
+                from ..voice.tts import recommended_default_tts
+
+                data["tts_provider"] = recommended_default_tts()
+            except Exception:  # noqa: BLE001 - never let this break startup
+                pass
+
         return cls(**data)
 
     def save(self, db: Database) -> None:

@@ -37,12 +37,13 @@ pytest>=8.0
 # playwright>=1.44           # then run: playwright install chromium
 
 # --- Voice (Phase 3) --------------------------------------------------------
-# sounddevice>=0.4.6         # microphone capture (push-to-talk)
-# numpy>=1.24                # audio buffer handling for the recorder
-# openai>=1.30               # OpenAI Whisper speech-to-text (needs OPENAI_API_KEY)
-# pyttsx3>=2.90              # offline text-to-speech (default TTS)
+# sounddevice>=0.4.6         # microphone capture + audio playback
+# numpy>=1.24                # audio buffer handling
+# openai>=1.30               # Whisper STT + OpenAI TTS (need OPENAI_API_KEY)
+# edge-tts>=6.1              # high-quality neural TTS (recommended default)
+# soundfile>=0.12            # decode edge-tts MP3 for playback (needs libsndfile)
+# pyttsx3>=2.90              # offline TTS (low quality; fallback only)
 # faster-whisper>=1.0        # optional local STT (not wired in this phase)
-# edge-tts>=6.1              # optional online TTS (not wired in this phase)
 
 # --- Wake word (optional, Phase 3) ------------------------------------------
 # openwakeword>=0.6

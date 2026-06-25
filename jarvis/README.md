@@ -157,8 +157,18 @@ pip install sounddevice numpy openai pyttsx3
 ```
 
 Then in the app: open **Settings** → tick **Enable voice**, choose
-`openai-whisper` for STT (make sure `OPENAI_API_KEY` is set) and `pyttsx3` for
-TTS. Optionally tick **Auto-send transcription**.
+`openai-whisper` for STT (make sure `OPENAI_API_KEY` is set). **Auto-send
+transcript** is ON by default for a fast feel.
+
+**Spoken replies are OFF by default** (the offline pyttsx3 voice is poor). To
+turn them on, tick **Read responses aloud** and pick a TTS provider:
+- `edge-tts` — high-quality neural voices (recommended): `pip install edge-tts
+  soundfile`, then choose a **TTS voice** in Settings.
+- `openai-tts` — high quality, uses your `OPENAI_API_KEY`.
+- `pyttsx3` — offline fallback, lower quality.
+- `none` — never speaks (default).
+
+Press **Stop / Cancel** (or **Esc**) to interrupt speech at any time.
 
 **How it flows:**
 

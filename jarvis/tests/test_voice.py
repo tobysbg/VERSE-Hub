@@ -60,29 +60,92 @@ def test_get_stt_provider_defaults_to_disabled():
 # --------------------------------------------------------------------------- #
 # TTS
 # --------------------------------------------------------------------------- #
-def test_disabled_tts_is_a_safe_noop_with_message():
-    from jarvis.voice.tts import DisabledTTS
+def test_none_tts_does_not_speak_but_does_not_error():
+    from jarvis.voice.tts import NoneTTS, get_tts_provider
 
-    tts = DisabledTTS()
+    tts = get_tts_provider("none")
+    assert isinstance(tts, NoneTTS)
+    assert tts.is_available() is True
+    ok, err = tts.speak("hello", should_stop=lambda: False)
+    assert ok is True and err == ""  # graceful no-op
+
+
+def test_missing_edge_tts_gives_clear_setup_message():
+    from jarvis.voice.tts import EdgeTTS
+
+    tts = EdgeTTS()
+    if tts.is_available():
+        return  # edge-tts installed in this env; nothing to assert.
+    assert "edge-tts" in tts.availability_message()
+    ok, err = tts.speak("hello")
+    assert ok is False
+    assert "edge-tts" in err
+
+
+def test_openai_tts_without_key_reports_clearly():
+    from jarvis.voice.tts import OpenAITTS
+
+    tts = OpenAITTS(api_key=None)
     assert tts.is_available() is False
-    assert tts.speak("hello") is False
-    assert tts.availability_message()  # clear setup instructions
+    ok, err = tts.speak("hi")
+    assert ok is False and "OPENAI_API_KEY" in err
 
 
-def test_get_tts_provider_falls_back_when_backend_missing():
-    from jarvis.voice.tts import DisabledTTS, Pyttsx3TTS, get_tts_provider
+def test_tts_provider_factory_types():
+    from jarvis.voice.tts import (
+        EdgeTTS,
+        NoneTTS,
+        OpenAITTS,
+        Pyttsx3TTS,
+        get_tts_provider,
+    )
 
-    tts = get_tts_provider("pyttsx3")
-    # Either pyttsx3 is installed (real engine) or we get the safe no-op.
-    assert isinstance(tts, (Pyttsx3TTS, DisabledTTS))
-    if isinstance(tts, DisabledTTS):
-        assert tts.speak("hi") is False
+    assert isinstance(get_tts_provider("none"), NoneTTS)
+    assert isinstance(get_tts_provider("pyttsx3"), Pyttsx3TTS)
+    assert isinstance(get_tts_provider("edge-tts"), EdgeTTS)
+    assert isinstance(get_tts_provider("openai-tts", api_key="sk-x"), OpenAITTS)
 
 
-def test_get_tts_provider_disabled_explicit():
-    from jarvis.voice.tts import DisabledTTS, get_tts_provider
+def test_recommended_default_tts_is_none_or_edge():
+    from jarvis.voice.tts import recommended_default_tts
 
-    assert isinstance(get_tts_provider("disabled"), DisabledTTS)
+    assert recommended_default_tts() in ("none", "edge-tts")
+
+
+def test_stop_interrupts_pyttsx3_between_sentences(monkeypatch):
+    import sys
+    import types
+
+    spoken: list[str] = []
+
+    class FakeEngine:
+        def getProperty(self, key):
+            return 200
+
+        def setProperty(self, key, value):
+            return None
+
+        def say(self, sentence):
+            spoken.append(sentence)
+
+        def runAndWait(self):
+            return None
+
+    fake = types.ModuleType("pyttsx3")
+    fake.init = lambda *a, **k: FakeEngine()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "pyttsx3", fake)
+
+    from jarvis.voice.tts import Pyttsx3TTS
+
+    tts = Pyttsx3TTS()
+    # Stop requested immediately -> nothing is spoken.
+    ok, _err = tts.speak("One. Two. Three.", should_stop=lambda: True)
+    assert ok is True and spoken == []
+
+    # No stop -> all sentences are spoken.
+    spoken.clear()
+    ok, _err = tts.speak("One. Two. Three.", should_stop=lambda: False)
+    assert ok is True and len(spoken) == 3
 
 
 # --------------------------------------------------------------------------- #
@@ -113,10 +176,32 @@ def test_voice_disabled_by_default():
     from jarvis.app.settings import Settings
 
     s = Settings()
-    assert s.voice_enabled is False
-    assert s.voice_autosend is False
+    assert s.voice_enabled is False           # voice input off by default
+    assert s.read_responses_aloud is False    # TTS off by default (poor quality)
+    assert s.voice_autosend is True           # fast assistant feel
     assert s.stt_provider == "openai-whisper"
-    assert s.tts_provider == "pyttsx3"
+    assert s.tts_provider == "none"           # no high-quality voice forced
+
+
+def test_autosend_and_read_aloud_settings_persist(tmp_path):
+    from jarvis.app.config import EnvConfig
+    from jarvis.app.settings import Settings
+    from jarvis.storage.database import Database
+
+    db = Database(tmp_path / "s.db")
+    s = Settings()
+    s.voice_autosend = False
+    s.read_responses_aloud = True
+    s.tts_provider = "edge-tts"
+    s.tts_voice = "en-US-GuyNeural"
+    s.save(db)
+
+    reloaded = Settings.load(db, EnvConfig())
+    assert reloaded.voice_autosend is False
+    assert reloaded.read_responses_aloud is True
+    assert reloaded.tts_provider == "edge-tts"
+    assert reloaded.tts_voice == "en-US-GuyNeural"
+    db.close()
 
 
 def test_new_status_values_exist():

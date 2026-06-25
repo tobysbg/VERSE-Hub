@@ -68,9 +68,18 @@ class SettingsDialog(QDialog):
         form.addRow("STT provider", self.stt_box)
 
         self.tts_box = QComboBox()
-        self.tts_box.addItems(["pyttsx3", "disabled"])
+        self.tts_box.addItems(["none", "pyttsx3", "edge-tts", "openai-tts"])
         self.tts_box.setCurrentText(settings.tts_provider)
+        self.tts_box.currentTextChanged.connect(self._reload_voices)
         form.addRow("TTS provider", self.tts_box)
+
+        # Editable so users can paste any valid voice id (e.g. an Edge voice).
+        self.voice_box = QComboBox()
+        self.voice_box.setEditable(True)
+        form.addRow("TTS voice", self.voice_box)
+        self._reload_voices(settings.tts_provider)
+        if settings.tts_voice:
+            self.voice_box.setCurrentText(settings.tts_voice)
 
         self.voice_speed = QDoubleSpinBox()
         self.voice_speed.setRange(0.5, 2.0)
@@ -78,9 +87,13 @@ class SettingsDialog(QDialog):
         self.voice_speed.setValue(settings.voice_speed)
         form.addRow("Voice speed", self.voice_speed)
 
-        self.voice_autosend = QCheckBox("Auto-send transcription (otherwise fills the input)")
+        self.voice_autosend = QCheckBox("Auto-send transcript (otherwise fills the input)")
         self.voice_autosend.setChecked(settings.voice_autosend)
         form.addRow(self.voice_autosend)
+
+        self.read_aloud = QCheckBox("Read responses aloud")
+        self.read_aloud.setChecked(settings.read_responses_aloud)
+        form.addRow(self.read_aloud)
 
         layout.addLayout(form)
 
@@ -123,6 +136,31 @@ class SettingsDialog(QDialog):
         buttons.addWidget(save)
         layout.addLayout(buttons)
 
+    def _reload_voices(self, provider_name: str) -> None:
+        """Populate the voice dropdown with the chosen provider's voices."""
+        from ..voice.tts import list_voices_for
+
+        current = self.voice_box.currentText() if hasattr(self, "voice_box") else ""
+        try:
+            voices = list_voices_for(provider_name, api_key=self._settings.openai_api_key)
+        except Exception:  # noqa: BLE001 - never let voice listing break Settings
+            voices = []
+        self.voice_box.clear()
+        self.voice_box.addItem("")  # blank = provider default
+        for voice_id, label in voices:
+            self.voice_box.addItem(f"{label}", voice_id)
+        if current:
+            self.voice_box.setCurrentText(current)
+
+    def _selected_voice(self) -> str:
+        # If the user picked a labelled item, use its stored voice id; otherwise
+        # use the free-typed text.
+        idx = self.voice_box.currentIndex()
+        data = self.voice_box.itemData(idx)
+        if data:
+            return str(data)
+        return self.voice_box.currentText().strip()
+
     def updated_settings(self) -> Settings:
         """Return a Settings object reflecting the dialog's current values."""
         return self._settings.model_copy(
@@ -136,8 +174,10 @@ class SettingsDialog(QDialog):
                 "voice_enabled": self.voice_enabled.isChecked(),
                 "stt_provider": self.stt_box.currentText(),
                 "tts_provider": self.tts_box.currentText(),
+                "tts_voice": self._selected_voice(),
                 "voice_speed": float(self.voice_speed.value()),
                 "voice_autosend": self.voice_autosend.isChecked(),
+                "read_responses_aloud": self.read_aloud.isChecked(),
                 "screen_access_enabled": self.screen_toggle.isChecked(),
                 "automation_enabled": self.automation_toggle.isChecked(),
                 "screenshot_logging": self.screenshot_log.isChecked(),

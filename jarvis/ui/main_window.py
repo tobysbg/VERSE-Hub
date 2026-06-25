@@ -142,19 +142,31 @@ class VoiceWorker(QThread):
 
 
 class TTSWorker(QThread):
-    """Speaks a piece of text aloud off the UI thread (pyttsx3 blocks)."""
+    """Speaks text aloud off the UI thread; interruptible via ``stop()``."""
 
     finished_speaking = Signal()
+    failed = Signal(str)
 
-    def __init__(self, tts, text: str, speed: float) -> None:
+    def __init__(self, tts, text: str, speed: float, voice: str = "") -> None:
         super().__init__()
         self.tts = tts
         self.text = text
         self.speed = speed
+        self.voice = voice
+        self._stop = threading.Event()
+
+    def stop(self) -> None:
+        self._stop.set()
 
     def run(self) -> None:
         try:
-            self.tts.speak(self.text, self.speed)
+            ok, err = self.tts.speak(
+                self.text, self.speed, self.voice, should_stop=self._stop.is_set
+            )
+            if not ok and err:
+                self.failed.emit(err)
+        except Exception as exc:  # noqa: BLE001 - TTS must never crash the app
+            self.failed.emit(f"Text-to-speech error: {exc}")
         finally:
             self.finished_speaking.emit()
 
@@ -477,13 +489,25 @@ class MainWindow(QWidget):
         self._speak(message)
 
     def _speak(self, text: str) -> None:
-        if not self.settings.voice_enabled or not text.strip():
+        # Reading responses aloud is a separate, opt-in setting (default OFF).
+        if not self.settings.read_responses_aloud or not text.strip():
             return
-        tts = get_tts_provider(self.settings.tts_provider)
+        if self.settings.tts_provider in ("none", ""):
+            return
+        tts = get_tts_provider(
+            self.settings.tts_provider,
+            self.settings.openai_api_key,
+            self.settings.tts_voice,
+        )
         if not tts.is_available():
-            return  # silently skip; voice output is best-effort
+            # Clear setup message, then keep going with text chat as normal.
+            self._append_chat("System", tts.availability_message())
+            return
         self.status_indicator.set_status(AgentStatus.SPEAKING)
-        worker = TTSWorker(tts, text, self.settings.voice_speed)
+        worker = TTSWorker(tts, text, self.settings.voice_speed, self.settings.tts_voice)
+        worker.failed.connect(
+            lambda e: self._append_chat("System", f"Text-to-speech failed: {e}")
+        )
         worker.finished_speaking.connect(
             lambda: self.status_indicator.set_status(AgentStatus.IDLE)
         )
@@ -529,6 +553,9 @@ class MainWindow(QWidget):
             acted = True
         if self._voice_worker and self._voice_worker.isRunning():
             self._voice_worker.stop_recording()
+            acted = True
+        if self._tts_worker and self._tts_worker.isRunning():
+            self._tts_worker.stop()
             acted = True
         if acted:
             self._on_timeline("Emergency stop requested.")
@@ -593,5 +620,6 @@ class MainWindow(QWidget):
             self._voice_worker.stop_recording()
             self._voice_worker.wait(2000)
         if self._tts_worker and self._tts_worker.isRunning():
+            self._tts_worker.stop()
             self._tts_worker.wait(2000)
         event.accept()
