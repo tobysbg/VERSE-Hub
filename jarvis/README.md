@@ -32,7 +32,7 @@ scaffolded as safe, well-typed stubs.
 | Voice: push-to-talk STT (OpenAI Whisper) + TTS (pyttsx3) | ✅ working (opt-in) |
 | Wake word / always-on mic | ⛔ intentionally not implemented |
 | Browser automation — visible Playwright window | ✅ working (opt-in install) |
-| Desktop control (click/type/screenshot/OCR/vision) | 🟡 safe stub, OFF by default |
+| Desktop control (click/type/screenshot/OCR) | ✅ working, OFF by default |
 | Gmail / Google Calendar | 🟡 safe stub |
 
 "Safe stub" means the tool is fully registered with the correct schema, risk
@@ -225,6 +225,21 @@ before the final submission and waits for you.
 
 If Playwright isn't installed, the tools show a clear setup message and the rest
 of JARVIS keeps working.
+
+---
+
+## Desktop control (Phase 5) — OFF by default
+
+Install: `pip install pyautogui mss` (OCR also needs `pytesseract pillow` + the
+Tesseract binary). Tools: `screenshot_screen`, `click`, `type_text`, `press_key`,
+`hotkey`, `scroll`, `locate_text_on_screen`.
+
+Safety: **Automation mode is OFF by default** — while off, these tools are hidden
+from the agent entirely. Enabling it prompts a warning. `click` is HIGH risk
+(confirm, allow-once); typing/keys/hotkeys require confirmation. Every action is
+previewed, logged, and shown as **Acting** in the HUD. pyautogui's fail-safe is
+on (slam the mouse into a screen corner to abort) and **Stop/Cancel** cancels
+between steps. No stealth, no background persistence, no auto-elevation.
 
 ---
 
