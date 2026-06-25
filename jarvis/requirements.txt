@@ -5,6 +5,7 @@ PySide6>=6.6
 pydantic>=2.5
 python-dotenv>=1.0
 httpx>=0.27          # used by the Ollama provider (and as a light HTTP client)
+cryptography>=41     # encrypts API keys / OAuth tokens at rest (never plaintext)
 
 # --- LLM provider SDKs (optional, lazy-imported; install what you use) -------
 # openai>=1.30

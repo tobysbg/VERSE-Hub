@@ -33,7 +33,8 @@ scaffolded as safe, well-typed stubs.
 | Wake word / always-on mic | ⛔ intentionally not implemented |
 | Browser automation — visible Playwright window | ✅ working (opt-in install) |
 | Desktop control (click/type/screenshot/OCR) | ✅ working, OFF by default |
-| Gmail / Google Calendar | 🟡 safe stub |
+| Gmail / Google Calendar (OAuth/API) | ✅ working (opt-in setup) |
+| Secrets (API keys / OAuth tokens) encrypted at rest | ✅ working |
 
 "Safe stub" means the tool is fully registered with the correct schema, risk
 level, and preview, but its `execute()` returns a clear *"not enabled / how to
@@ -240,6 +241,31 @@ from the agent entirely. Enabling it prompts a warning. `click` is HIGH risk
 previewed, logged, and shown as **Acting** in the HUD. pyautogui's fail-safe is
 on (slam the mouse into a screen corner to abort) and **Stop/Cancel** cancels
 between steps. No stealth, no background persistence, no auto-elevation.
+
+---
+
+## Gmail & Calendar (Phase 6) — OAuth/API, not screen-clicking
+
+Install: `pip install google-api-python-client google-auth-oauthlib`. Then create
+a Google Cloud project, enable the **Gmail** and **Calendar** APIs, create an
+OAuth **Desktop app** client, download `credentials.json`, and place it in
+`~/.jarvis/`. The first Gmail/Calendar action opens a browser to authorize.
+
+Tools: `count_sent_emails`, `search_emails`, `summarize_emails`, `draft_email`,
+`send_email`; `list_events`, `find_free_slots`, `create_event`, `delete_event`.
+
+Safety: reading/searching/summarizing and drafting are allowed; **sending email,
+creating, and deleting events always require confirmation** (send/delete are
+allow-once only). All of this uses the official Google APIs — never screen
+automation.
+
+## Secret storage (no plaintext)
+
+API keys and the Google OAuth token are **never** written to the SQLite settings
+table. They are encrypted at rest with `cryptography` (Fernet) in
+`~/.jarvis/secrets.enc`, with the key in `~/.jarvis/secret.key` (owner-only
+permissions). If the crypto backend is unavailable, secrets are kept in memory
+for the session only — JARVIS never falls back to plaintext on disk.
 
 ---
 

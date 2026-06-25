@@ -17,13 +17,12 @@ from pydantic import BaseModel, Field
 from .config import EnvConfig
 from ..storage.database import Database
 from ..storage.models import AgentMode
+from ..storage.secrets import SecretStore, get_secret_store
 
-# Settings keys we persist (kept in one place to avoid typos).
+# Non-sensitive settings persisted in the SQLite settings table.
 _SETTING_KEYS = [
     "llm_provider",
     "llm_model",
-    "openai_api_key",
-    "anthropic_api_key",
     "ollama_base_url",
     "agent_mode",
     "screen_access_enabled",
@@ -37,6 +36,13 @@ _SETTING_KEYS = [
     "read_responses_aloud",
     "developer_mode",
     "screenshot_logging",
+]
+
+# Sensitive values - NEVER stored in plaintext SQLite. Persisted only via the
+# encrypted SecretStore (or kept in memory if encryption is unavailable).
+_SECRET_KEYS = [
+    "openai_api_key",
+    "anthropic_api_key",
 ]
 
 
@@ -80,8 +86,19 @@ class Settings(BaseModel):
 
     # ------------------------------------------------------------------------
     @classmethod
-    def load(cls, db: Database, env: EnvConfig) -> "Settings":
-        """Build settings from env defaults, then overlay persisted values."""
+    def load(
+        cls,
+        db: Database,
+        env: EnvConfig,
+        secrets: Optional[SecretStore] = None,
+    ) -> "Settings":
+        """Build settings from env defaults, then overlay persisted values.
+
+        API keys come from the env first, then from the encrypted SecretStore
+        (which takes precedence, mirroring how UI-set values override .env). They
+        are never read from or written to the SQLite settings table.
+        """
+        secrets = secrets or get_secret_store()
         data: dict = {
             "llm_provider": env.llm_provider,
             "llm_model": env.llm_model,
@@ -93,6 +110,11 @@ class Settings(BaseModel):
         for key in _SETTING_KEYS:
             if key in stored and stored[key] is not None:
                 data[key] = stored[key]
+        # Overlay secrets from the encrypted store (precedence over env).
+        for key in _SECRET_KEYS:
+            secret_value = secrets.get(key)
+            if secret_value:
+                data[key] = secret_value
         # Drop Nones so pydantic defaults apply where appropriate.
         data = {k: v for k, v in data.items() if v is not None}
 
@@ -108,14 +130,18 @@ class Settings(BaseModel):
 
         return cls(**data)
 
-    def save(self, db: Database) -> None:
-        """Persist every known setting to the database."""
+    def save(self, db: Database, secrets: Optional[SecretStore] = None) -> None:
+        """Persist non-secret settings to SQLite and secrets to the SecretStore."""
+        secrets = secrets or get_secret_store()
         dump = self.model_dump()
         for key in _SETTING_KEYS:
             value = dump.get(key)
             if isinstance(value, AgentMode):
                 value = value.value
             db.set_setting(key, value)
+        # Sensitive values go ONLY to the encrypted store (never plaintext SQLite).
+        for key in _SECRET_KEYS:
+            secrets.set(key, dump.get(key))
 
     def active_api_key(self) -> Optional[str]:
         if self.llm_provider == "openai":
