@@ -311,6 +311,11 @@ class MainWindow(QWidget):
             return
         self.chat_input.clear()
         self._append_chat("You", text)
+        # Start a clean slate for this request so stale ERROR state / old
+        # timeline entries from a previous turn don't look like the current
+        # request failed.
+        self.status_indicator.set_status(AgentStatus.THINKING)
+        self._on_timeline("────────  new request  ────────")
         self._set_busy(True)
 
         # Rebuild provider/safety from current settings for this request.

@@ -92,6 +92,11 @@ def _split_system(messages: list[LLMMessage]) -> tuple[str, list[dict[str, Any]]
         elif m.role == "tool":
             # Represent tool results as a user message block.
             conv.append({"role": "user", "content": f"[tool result] {m.content}"})
+        elif m.role == "assistant" and m.tool_calls and not m.content:
+            # A pure tool-call turn has no text; Anthropic rejects empty content,
+            # so describe the requested calls instead.
+            names = ", ".join(tc.name for tc in m.tool_calls)
+            conv.append({"role": "assistant", "content": f"(requesting tools: {names})"})
         else:
             conv.append({"role": m.role, "content": m.content})
     return "\n\n".join(system_parts), conv

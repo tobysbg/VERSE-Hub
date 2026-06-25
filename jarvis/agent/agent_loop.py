@@ -23,7 +23,7 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from ..llm.base import LLMProvider, ToolCall
+from ..llm.base import LLMMessage, LLMProvider, ToolCall
 from ..storage.database import Database
 from ..storage.models import (
     ActionLogEntry,
@@ -134,12 +134,18 @@ class AgentLoop:
         tools = self._exposed_tools(settings.agent_mode)
         schemas = self.registry.schemas(tools) if tools else None
 
+        # Local working transcript for THIS request. The intermediate
+        # assistant-tool_call and tool-result messages live here only - they are
+        # never written into long-term ConversationMemory, which keeps only the
+        # user request and the final natural-language answer.
+        working: list[LLMMessage] = self.memory.build()
+
         for _ in range(MAX_TOOL_ITERATIONS):
             if self.stopped:
                 return self._stop_message()
 
             self.cb.on_status(AgentStatus.THINKING)
-            response = self.provider.chat(self.memory.build(), tools=schemas)
+            response = self.provider.chat(working, tools=schemas)
 
             if not response.ok and not response.text:
                 self.cb.on_status(AgentStatus.ERROR)
@@ -152,14 +158,28 @@ class AgentLoop:
                 self._finish_assistant(response.text)
                 return response.text
 
-            # Record any interim assistant text.
-            if response.text:
-                self.memory.add_assistant(response.text)
-
+            # Append the assistant turn that carries the tool_calls, immediately
+            # followed by one tool-result message per call (matching ids). This
+            # is exactly the ordering the Chat Completions API requires.
+            working.append(
+                LLMMessage(
+                    role="assistant",
+                    content=response.text or "",
+                    tool_calls=list(response.tool_calls),
+                )
+            )
             for call in response.tool_calls:
                 if self.stopped:
                     return self._stop_message()
-                self._run_tool_call(call, user_text, intent.value)
+                payload = self._run_tool_call(call, user_text, intent.value)
+                working.append(
+                    LLMMessage(
+                        role="tool",
+                        content=payload,
+                        name=call.name,
+                        tool_call_id=call.id,
+                    )
+                )
 
         # Safety net if the model keeps looping.
         final = "I've reached the tool-call limit for this request. Stopping here."
@@ -167,16 +187,20 @@ class AgentLoop:
         return final
 
     # -- per tool-call -------------------------------------------------------
-    def _run_tool_call(self, call: ToolCall, user_text: str, plan: str) -> None:
+    def _run_tool_call(self, call: ToolCall, user_text: str, plan: str) -> str:
+        """Execute one tool call and return the result payload string.
+
+        The caller is responsible for appending the returned payload to the
+        working transcript as a ``role="tool"`` message (with the matching
+        ``tool_call_id``), so ordering stays valid for the API.
+        """
         tool = self.registry.get(call.name)
         if tool is None:
-            self._feed_tool_result(call, ToolResult.fail(f"Unknown tool: {call.name}"))
-            return
+            return self._format_tool_payload(ToolResult.fail(f"Unknown tool: {call.name}"))
 
         args, err = tool.safe_validate(call.arguments)
         if err or args is None:
-            self._feed_tool_result(call, ToolResult.fail(err or "invalid arguments"))
-            return
+            return self._format_tool_payload(ToolResult.fail(err or "invalid arguments"))
 
         preview = tool.preview(args)
         result = self.safety.evaluate(tool, args)
@@ -186,8 +210,7 @@ class AgentLoop:
             self.cb.on_status(AgentStatus.ERROR)
             self._log(user_text, plan, tool, preview, result.risk, "blocked",
                       ToolResult.fail(result.block_message))
-            self._feed_tool_result(call, ToolResult.fail(result.block_message))
-            return
+            return self._format_tool_payload(ToolResult.fail(result.block_message))
 
         if result.decision == SafetyDecision.CONFIRM:
             self.cb.on_status(AgentStatus.NEEDS_CONFIRMATION)
@@ -203,8 +226,7 @@ class AgentLoop:
             if decision == ConfirmDecision.DENY:
                 self._log(user_text, plan, tool, preview, result.risk, "denied",
                           ToolResult.fail("User denied."))
-                self._feed_tool_result(call, ToolResult.fail("The user denied this action."))
-                return
+                return self._format_tool_payload(ToolResult.fail("The user denied this action."))
             if decision == ConfirmDecision.ALWAYS and not result.allow_once_only:
                 self.safety.grant_session(tool.name)
             confirmation = decision.value
@@ -221,14 +243,15 @@ class AgentLoop:
         self._log(user_text, plan, tool, preview, result.risk, confirmation, exec_result)
         status = "ok" if exec_result.success else "failed"
         self.cb.on_timeline(f"{tool.name} -> {status}: {exec_result.message}")
-        self._feed_tool_result(call, exec_result)
+        return self._format_tool_payload(exec_result)
 
     # -- helpers -------------------------------------------------------------
-    def _feed_tool_result(self, call: ToolCall, result: ToolResult) -> None:
+    @staticmethod
+    def _format_tool_payload(result: ToolResult) -> str:
         payload = ("OK: " if result.success else "ERROR: ") + (result.message or "")
         if result.data:
             payload += f"\nData: {result.data}"
-        self.memory.add_tool_result(payload, name=call.name, tool_call_id=call.id)
+        return payload
 
     def _exposed_tools(self, mode: AgentMode) -> list[BaseTool]:
         settings = self.safety.settings

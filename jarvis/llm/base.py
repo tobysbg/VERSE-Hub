@@ -13,23 +13,30 @@ from typing import Any, Optional
 
 
 @dataclass
-class LLMMessage:
-    """A provider-neutral chat message."""
-
-    role: str  # "system" | "user" | "assistant" | "tool"
-    content: str
-    # Optional structured tool-call payloads (provider-specific shape kept opaque).
-    tool_call_id: Optional[str] = None
-    name: Optional[str] = None
-
-
-@dataclass
 class ToolCall:
     """A request from the model to invoke a named tool with JSON arguments."""
 
     id: str
     name: str
     arguments: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LLMMessage:
+    """A provider-neutral chat message.
+
+    An assistant message may carry ``tool_calls`` (the calls the model wants to
+    make). A ``tool`` message carries the result of one such call and MUST set
+    ``tool_call_id`` to the id of the assistant tool_call it answers.
+    """
+
+    role: str  # "system" | "user" | "assistant" | "tool"
+    content: str
+    # Set on assistant messages that request tool invocations.
+    tool_calls: Optional[list[ToolCall]] = None
+    # Set on tool messages: the id of the assistant tool_call being answered.
+    tool_call_id: Optional[str] = None
+    name: Optional[str] = None
 
 
 @dataclass

@@ -1,8 +1,11 @@
 """Short-term conversation memory for the agent.
 
-Keeps a bounded list of provider-neutral messages used to build each LLM
-request. Long-term history lives in SQLite (see storage.database); this is the
-working window passed to the model.
+Keeps a bounded list of provider-neutral messages used to seed each LLM request.
+Only durable conversation turns live here - user messages and final
+natural-language assistant answers. The intermediate assistant-tool_call and
+tool-result messages are kept in a per-request working transcript inside the
+agent loop and are deliberately NOT stored here, so the long-term history can
+never contain an orphan ``role="tool"`` message.
 """
 from __future__ import annotations
 
@@ -23,9 +26,6 @@ class ConversationMemory:
 
     def add_assistant(self, content: str) -> None:
         self._add(LLMMessage(role="assistant", content=content))
-
-    def add_tool_result(self, content: str, name: str = "", tool_call_id: str = "") -> None:
-        self._add(LLMMessage(role="tool", content=content, name=name, tool_call_id=tool_call_id))
 
     def _add(self, message: LLMMessage) -> None:
         self._messages.append(message)
