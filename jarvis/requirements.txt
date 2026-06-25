@@ -1,0 +1,44 @@
+# ----------------------------------------------------------------------------
+# JARVIS - core dependencies (install these to run the app and the tests)
+# ----------------------------------------------------------------------------
+PySide6>=6.6
+pydantic>=2.5
+python-dotenv>=1.0
+httpx>=0.27          # used by the Ollama provider (and as a light HTTP client)
+
+# --- LLM provider SDKs (optional, lazy-imported; install what you use) -------
+# openai>=1.30
+# anthropic>=0.34
+
+# --- Testing -----------------------------------------------------------------
+pytest>=8.0
+
+# ----------------------------------------------------------------------------
+# OPTIONAL / PLATFORM-SPECIFIC dependencies.
+# These power Phases 3-6. They are NOT required for the MVP (Phase 1 + 2) and
+# are intentionally left commented so a clean `pip install -r requirements.txt`
+# works on any OS (including Linux CI). Uncomment the groups you need.
+# ----------------------------------------------------------------------------
+
+# --- Desktop automation (Phase 5, Windows-first) ----------------------------
+# pyautogui>=0.9.54
+# pywinauto>=0.6.8 ; sys_platform == "win32"
+# mss>=9.0
+# pytesseract>=0.3.10        # OCR for locate_text_on_screen (needs Tesseract)
+
+# --- Browser automation (Phase 4) -------------------------------------------
+# playwright>=1.44           # then run: playwright install chromium
+
+# --- Voice (Phase 3) --------------------------------------------------------
+# faster-whisper>=1.0        # local STT
+# sounddevice>=0.4.6         # microphone capture
+# pyttsx3>=2.90              # offline TTS
+# edge-tts>=6.1              # Microsoft Edge online TTS
+
+# --- Wake word (optional, Phase 3) ------------------------------------------
+# openwakeword>=0.6
+
+# --- Gmail / Google Calendar (Phase 6) --------------------------------------
+# google-api-python-client>=2.130
+# google-auth-oauthlib>=1.2
+# google-auth-httplib2>=0.2

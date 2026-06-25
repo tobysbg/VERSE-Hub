@@ -1,0 +1,211 @@
+# JARVIS — Desktop AI Assistant
+
+A Windows-first desktop AI assistant with an original futuristic sci-fi HUD and a
+**safety-gated, tool-using agent**. JARVIS can chat by text (voice is scaffolded),
+open apps and files, and—once you explicitly enable them—drive a browser and
+control the desktop. Every medium/high-risk action passes through a safety layer
+that asks for your confirmation first. **You always stay in control.**
+
+This is an original assistant console. It contains **no** copyrighted Iron
+Man / Marvel assets; all HUD artwork is drawn procedurally with Qt.
+
+![JARVIS HUD](docs/hud.png)
+
+---
+
+## What's implemented
+
+This build delivers **Phase 1 + Phase 2 fully working**, with Phases 3–7
+scaffolded as safe, well-typed stubs.
+
+| Area | Status |
+| --- | --- |
+| Futuristic HUD (radar, waveform, status panel, timeline, toggles, stop) | ✅ working |
+| Text chat + conversation memory | ✅ working |
+| LLM providers: OpenAI / Anthropic / Ollama (graceful with no key) | ✅ working |
+| Tool registry with pydantic schemas, risk levels, confirmation, previews | ✅ working |
+| App tools (open/close/focus/list windows) | ✅ working (Windows-first) |
+| File tools (search/open/create/read/write/move/delete/list) | ✅ working |
+| Safety layer + confirmation dialog (Allow once / Deny / Always allow) | ✅ working |
+| SQLite logging + Session History panel | ✅ working |
+| Tests (safety, registry, file tools, agent loop) | ✅ working |
+| Voice (push-to-talk STT/TTS, wake word) | 🟡 safe stub |
+| Browser automation (Playwright) | 🟡 safe stub |
+| Desktop control (click/type/screenshot/OCR/vision) | 🟡 safe stub, OFF by default |
+| Gmail / Google Calendar | 🟡 safe stub |
+
+"Safe stub" means the tool is fully registered with the correct schema, risk
+level, and preview, but its `execute()` returns a clear *"not enabled / how to
+set up"* message instead of performing anything. Nothing unsafe ever runs.
+
+---
+
+## Architecture
+
+```
+jarvis/
+  app/        main.py (entrypoint), config.py (.env), settings.py (pydantic + SQLite)
+  ui/         main_window.py, hud_widgets.py, confirm_dialog.py, settings_dialog.py, styles.qss
+  agent/      agent_loop.py, planner.py, memory.py, safety.py, prompts.py
+  llm/        base.py, openai_provider.py, anthropic_provider.py, ollama_provider.py, factory.py
+  tools/      base_tool.py, registry.py, app_tools.py, file_tools.py,
+              browser_tools.py, desktop_tools.py, email_tools.py, calendar_tools.py
+  voice/      stt.py, tts.py, wake_word.py
+  storage/    database.py, models.py
+  tests/      test_safety.py, test_tool_registry.py, test_file_tools.py, test_agent_loop.py
+```
+
+**Request flow:** user request → classify intent → ask the LLM (with tool
+schemas) → for each requested tool: validate args → **safety check** →
+(confirm if needed) → execute → observe → feed back → final reply. The agent
+runs on a background thread; the HUD's **Stop** button sets a cancel flag that
+is checked between every step.
+
+---
+
+## Safety model
+
+Actions are classified into four risk levels — **low / medium / high / blocked** —
+from the tool's declared risk plus heuristics over the actual arguments.
+
+- **Low** (read file, search, open app, navigate): runs without confirmation in
+  Controlled/Confirmation mode.
+- **Medium** (write file, fill form, run command): requires confirmation.
+- **High** (delete file, send email, move files, pay/book, change settings):
+  requires confirmation; "Always allow for session" is **not** offered.
+- **Blocked** (passwords, 2FA codes, banking pages, financial trades, security
+  bypass, credential scraping, keylogging, persistence): **refused** unless you
+  turn on Developer mode in Settings — and even then they still require a
+  one-time confirmation.
+
+The confirmation dialog shows **what** will happen, **why** it was classified
+that way, and the **exact data** involved, with **Allow once / Deny /
+Always allow (this session)**.
+
+Capability toggles default to the safe position:
+
+- **Screen access** — OFF by default (gates screenshot/OCR/vision tools).
+- **Automation mode** — OFF by default (gates mouse/keyboard control). Enabling
+  it prompts a warning. While off, those tools are hidden from the agent entirely.
+
+There is **no** stealth mode, background persistence, keylogging, or
+antivirus/firewall tampering anywhere in this project.
+
+---
+
+## Installation
+
+### Windows 11 (primary)
+
+```bat
+git clone <your-repo-url>
+cd VERSE-Hub\jarvis
+copy .env.example .env
+REM edit .env and add an API key (or point LLM_PROVIDER=ollama)
+run.bat
+```
+
+`run.bat` creates a virtual environment, installs the core dependencies, and
+launches the app with `python -m jarvis.app.main`.
+
+### Manual / cross-platform (development)
+
+```bash
+cd VERSE-Hub/jarvis
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env               # then edit it
+# Run from the repository ROOT (the parent of this folder):
+cd ..
+python -m jarvis.app.main
+```
+
+> The app **never crashes** if no API key is set — it shows a "configure a
+> provider" banner and you can still explore the HUD, tools, and safety system.
+
+### Optional capabilities
+
+Uncomment the relevant groups in `requirements.txt` and install:
+
+- **Desktop automation:** `pip install pyautogui mss` (+ `pywinauto` on Windows)
+- **Browser:** `pip install playwright && playwright install chromium`
+- **Voice (STT):** `pip install faster-whisper sounddevice`
+- **Voice (TTS):** `pip install pyttsx3` (offline) or `edge-tts`
+- **Gmail/Calendar:** `pip install google-api-python-client google-auth-oauthlib`
+
+---
+
+## Configuration (`.env`)
+
+```
+LLM_PROVIDER=openai            # openai | anthropic | ollama
+LLM_MODEL=                     # blank = provider default
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
+Settings changed in the in-app **Settings** dialog are stored in SQLite
+(`~/.jarvis/jarvis.db`) and take precedence over `.env`.
+
+---
+
+## Running the tests
+
+```bash
+cd VERSE-Hub
+python -m pytest jarvis/tests -q
+```
+
+The tests cover the safety classifier, the tool registry (incl. dynamic risk and
+capability filtering), the working file tools, and the agent loop (driven by a
+fake LLM provider, no network needed).
+
+---
+
+## Usage examples
+
+- **"Open Notepad and write a short todo list."** → opens Notepad (app tool);
+  with desktop automation enabled, would type the list after confirming.
+- **"How many emails did I send this week?"** → uses Gmail if configured;
+  otherwise explains the one-time OAuth setup.
+- **"Find a train from Salzburg to Vienna tomorrow after 14:00."** → (with the
+  browser enabled) searches and compares options, and **stops before any
+  booking/payment**, asking you to confirm.
+- **"Delete all files in Downloads."** → refuses bulk destruction, explains the
+  risk, and suggests moving items to a review folder instead.
+- **"Send this email to Max."** → drafts it, shows a preview, and sends **only**
+  after explicit confirmation.
+
+---
+
+## Keyboard
+
+- **Ctrl+Shift+J** — focus the JARVIS input (in-app). A truly global, OS-wide
+  hotkey needs a small platform helper on Windows and is left as a follow-up.
+- **Esc** — emergency stop / cancel the current task.
+
+---
+
+## What remains (per stubbed phase)
+
+- **Voice:** wire a real STT backend (faster-whisper or Whisper API) and a TTS
+  engine into `voice/stt.py` / `voice/tts.py`; connect push-to-talk capture to
+  the mic button. Interfaces and the waveform animation are already in place.
+- **Browser:** add a Playwright session manager (separate profile) behind the
+  existing `browser_tools.py` schemas; enforce the "stop before payment" rule at
+  the action layer (already enforced via risk levels + confirmation).
+- **Desktop control:** implement `pyautogui`/`mss` actions behind the
+  `desktop_tools.py` stubs; they are already gated by the Automation toggle and
+  per-action confirmation.
+- **Gmail/Calendar:** implement the Google OAuth flow and API calls behind the
+  `email_tools.py` / `calendar_tools.py` schemas; sending/creating/deleting are
+  already marked high-risk + confirmation-required.
+- **Packaging:** bundle to a Windows `.exe` (e.g. PyInstaller).
+
+---
+
+## License
+
+MIT. Original work — no third-party copyrighted assets included.

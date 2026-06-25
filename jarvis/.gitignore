@@ -1,0 +1,11 @@
+# JARVIS
+.env
+.venv/
+__pycache__/
+*.pyc
+*.db
+.jarvis/
+.pytest_cache/
+credentials.json
+token.json
+browser_profile/

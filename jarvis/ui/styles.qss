@@ -1,0 +1,159 @@
+/* ========================================================================= *
+ * JARVIS HUD theme - original futuristic sci-fi console.
+ * Dark glassmorphism, cyan/blue neon accents, clean typography.
+ * No copyrighted assets.
+ * ========================================================================= */
+
+QWidget {
+    background-color: #060b14;
+    color: #cfe9ff;
+    font-family: "Segoe UI", "Roboto", "DejaVu Sans", sans-serif;
+    font-size: 14px;
+}
+
+#RootBackground {
+    background-color: #060b14;
+}
+
+/* Translucent glass cards */
+QFrame#GlassCard {
+    background-color: rgba(14, 26, 43, 0.72);
+    border: 1px solid rgba(54, 200, 255, 0.25);
+    border-radius: 14px;
+}
+
+QLabel#TitleLabel {
+    color: #5fd2ff;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: 3px;
+}
+
+QLabel#SubtitleLabel {
+    color: #6c8bab;
+    font-size: 11px;
+    letter-spacing: 2px;
+}
+
+QLabel#SectionLabel {
+    color: #4fb8e6;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+}
+
+/* Chat transcript */
+QTextEdit#ChatView {
+    background-color: rgba(8, 16, 28, 0.6);
+    border: 1px solid rgba(54, 200, 255, 0.18);
+    border-radius: 12px;
+    padding: 12px;
+    color: #d7ecff;
+}
+
+/* Chat input */
+QLineEdit#ChatInput {
+    background-color: rgba(8, 18, 32, 0.9);
+    border: 1px solid rgba(54, 200, 255, 0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #eaf6ff;
+    selection-background-color: #1f6f9c;
+}
+QLineEdit#ChatInput:focus {
+    border: 1px solid #4fd2ff;
+}
+
+/* Buttons */
+QPushButton {
+    background-color: rgba(20, 40, 64, 0.85);
+    border: 1px solid rgba(79, 210, 255, 0.45);
+    border-radius: 10px;
+    padding: 9px 16px;
+    color: #d7ecff;
+}
+QPushButton:hover {
+    background-color: rgba(31, 72, 104, 0.9);
+    border: 1px solid #5fd2ff;
+}
+QPushButton:pressed {
+    background-color: rgba(15, 30, 48, 0.9);
+}
+QPushButton:disabled {
+    color: #4a6075;
+    border: 1px solid rgba(79, 210, 255, 0.15);
+}
+
+QPushButton#SendButton {
+    background-color: rgba(31, 120, 160, 0.9);
+    border: 1px solid #5fd2ff;
+    font-weight: 600;
+}
+
+QPushButton#StopButton {
+    background-color: rgba(120, 24, 36, 0.85);
+    border: 1px solid #ff5a6e;
+    color: #ffd7dc;
+    font-weight: 600;
+}
+QPushButton#StopButton:hover {
+    background-color: rgba(150, 30, 44, 0.95);
+}
+
+/* Toggle buttons (checkable) */
+QPushButton#ToggleButton {
+    text-align: left;
+}
+QPushButton#ToggleButton:checked {
+    background-color: rgba(24, 96, 72, 0.9);
+    border: 1px solid #43e0a0;
+    color: #d8ffe9;
+}
+
+/* Timeline / history lists */
+QListWidget {
+    background-color: rgba(8, 16, 28, 0.55);
+    border: 1px solid rgba(54, 200, 255, 0.15);
+    border-radius: 10px;
+    padding: 6px;
+}
+QListWidget::item {
+    padding: 4px 2px;
+    border-bottom: 1px solid rgba(54, 200, 255, 0.06);
+}
+
+QScrollBar:vertical {
+    background: transparent;
+    width: 9px;
+    margin: 2px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(79, 210, 255, 0.35);
+    border-radius: 4px;
+    min-height: 24px;
+}
+QScrollBar::add-line, QScrollBar::sub-line { height: 0; }
+
+/* Dialogs */
+QDialog {
+    background-color: #081120;
+}
+
+QComboBox, QSpinBox, QDoubleSpinBox {
+    background-color: rgba(8, 18, 32, 0.9);
+    border: 1px solid rgba(79, 210, 255, 0.35);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: #eaf6ff;
+}
+QCheckBox { spacing: 8px; }
+QCheckBox::indicator {
+    width: 16px; height: 16px;
+    border: 1px solid rgba(79, 210, 255, 0.5);
+    border-radius: 4px;
+    background: rgba(8, 18, 32, 0.9);
+}
+QCheckBox::indicator:checked {
+    background: #43e0a0;
+    border: 1px solid #43e0a0;
+}
