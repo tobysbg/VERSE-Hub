@@ -337,7 +337,7 @@ class MainWindow(QWidget):
         self.history_btn.clicked.connect(self._show_history)
         layout.addWidget(self.history_btn)
 
-        self.diagnostics_btn = QPushButton("Voice diagnostics")
+        self.diagnostics_btn = QPushButton("Diagnostics (voice + browser)")
         self.diagnostics_btn.clicked.connect(self._show_diagnostics)
         layout.addWidget(self.diagnostics_btn)
 
@@ -687,10 +687,13 @@ class MainWindow(QWidget):
         self._on_timeline(summary_line(diag))
 
     def _show_diagnostics(self) -> None:
-        diag = voice_diagnostics(self.settings)
+        from ..tools.browser_session import browser_diagnostics, format_browser_diagnostics
+
+        voice = format_diagnostics(voice_diagnostics(self.settings))
+        browser = format_browser_diagnostics(browser_diagnostics())
         box = QMessageBox(self)
-        box.setWindowTitle("JARVIS - Voice diagnostics")
-        box.setText(format_diagnostics(diag))
+        box.setWindowTitle("JARVIS - Diagnostics")
+        box.setText(f"VOICE\n{voice}\n\nBROWSER\n{browser}")
         box.exec()
 
     def closeEvent(self, event) -> None:  # noqa: N802

@@ -19,12 +19,17 @@ module only performs the low-level, already-approved action.
 """
 from __future__ import annotations
 
+import os
 import queue
+import sys
 import threading
 from pathlib import Path
 from typing import Any, Callable, Optional, Tuple
 
 _PROFILE_DIR = Path.home() / ".jarvis" / "browser_profile"
+
+# Visible (not headless) - the user must be able to watch the automation.
+VISIBLE_MODE = True
 
 
 def playwright_available() -> bool:
@@ -35,10 +40,39 @@ def playwright_available() -> bool:
         return False
 
 
+def chromium_installed() -> bool:
+    """Best-effort: is the Playwright Chromium browser binary present?"""
+    if not playwright_available():
+        return False
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as pw:
+            path = pw.chromium.executable_path
+        return bool(path) and os.path.exists(path)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _install_commands() -> str:
+    """Setup commands qualified with the EXACT interpreter running JARVIS.
+
+    The most common failure is installing Playwright into a different venv than
+    the one launching JARVIS; naming the interpreter makes that obvious.
+    """
+    exe = sys.executable
+    return (
+        f'    "{exe}" -m pip install playwright\n'
+        f'    "{exe}" -m playwright install chromium'
+    )
+
+
 SETUP_HINT = (
-    "Browser automation needs Playwright. Install it with:\n"
-    "    pip install playwright\n"
-    "    playwright install chromium\n"
+    "Browser automation needs Playwright, which isn't usable in the interpreter "
+    "running JARVIS.\n"
+    f"Running interpreter: {sys.executable}\n"
+    "Install it into THIS interpreter:\n"
+    f"{_install_commands()}\n"
     "The browser opens in a separate, visible window using its own profile, and "
     "JARVIS stops for confirmation before any login, payment, booking, or form "
     "submission."
@@ -134,8 +168,9 @@ class BrowserSession:
                     pass
         except Exception as exc:  # noqa: BLE001
             self._start_error = (
-                f"Could not launch the browser ({exc}). If this is the first run, "
-                f"run: playwright install chromium"
+                f"Could not launch Chromium ({exc}). If this is the first run, "
+                f"the browser binary is probably missing - install it with:\n"
+                f"{_install_commands()}"
             )
             ready.set()
         finally:
@@ -199,3 +234,42 @@ class BrowserSession:
             self._thread.join(timeout=10)
         self._started = False
         return True, "Browser closed."
+
+
+# --------------------------------------------------------------------------- #
+# Diagnostics
+# --------------------------------------------------------------------------- #
+def browser_tools_registered() -> bool:
+    """True if the visible browser tools are present in the default registry."""
+    try:
+        from .registry import build_default_registry
+
+        names = {t.name for t in build_default_registry().all()}
+        return {"open_url", "search_web", "extract_page_text"} <= names
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def browser_diagnostics(check_chromium: bool = True) -> dict:
+    """Snapshot of the browser environment for the diagnostics panel/log."""
+    pw_ok = playwright_available()
+    return {
+        "executable": sys.executable,
+        "playwright_import_ok": pw_ok,
+        "chromium_installed": chromium_installed() if (pw_ok and check_chromium) else False,
+        "browser_tools_registered": browser_tools_registered(),
+        "visible_mode": VISIBLE_MODE,
+    }
+
+
+def format_browser_diagnostics(diag: dict) -> str:
+    def yn(flag: bool) -> str:
+        return "yes" if flag else "no"
+
+    return "\n".join([
+        f"playwright import ok    : {yn(diag['playwright_import_ok'])}",
+        f"chromium installed      : {yn(diag['chromium_installed'])}",
+        f"browser tools registered: {yn(diag['browser_tools_registered'])}",
+        f"visible (not headless)  : {yn(diag['visible_mode'])}",
+        f"interpreter             : {diag['executable']}",
+    ])

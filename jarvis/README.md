@@ -224,8 +224,12 @@ booking / submission is escalated to **HIGH** (allow-once only). Passwords, 2FA
 codes, and banking pages remain **blocked** by the safety layer. JARVIS stops
 before the final submission and waits for you.
 
-If Playwright isn't installed, the tools show a clear setup message and the rest
-of JARVIS keeps working.
+If Playwright isn't installed (or is installed in a *different* interpreter than
+the one running JARVIS), the tools show a setup message that names the running
+interpreter and the exact commands to run. The **Diagnostics (voice + browser)**
+button reports: playwright import ok, chromium installed, browser tools
+registered, and visible (not headless) — so a wiring/interpreter problem is
+obvious at a glance.
 
 ---
 
