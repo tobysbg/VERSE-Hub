@@ -124,6 +124,21 @@ class SettingsDialog(QDialog):
         self.developer_mode.setChecked(settings.developer_mode)
         layout.addWidget(self.developer_mode)
 
+        # --- Desktop integration (Phase 7) ---------------------------------
+        self.minimize_to_tray = QCheckBox("Minimize to system tray on close")
+        self.minimize_to_tray.setChecked(settings.minimize_to_tray)
+        layout.addWidget(self.minimize_to_tray)
+
+        self.global_hotkey = QCheckBox("Global hotkey Ctrl+Shift+J to summon JARVIS")
+        self.global_hotkey.setChecked(settings.global_hotkey_enabled)
+        layout.addWidget(self.global_hotkey)
+
+        self.wake_word = QCheckBox(
+            "Wake word 'Hey JARVIS' (EXPERIMENTAL - disabled; no always-on mic yet)"
+        )
+        self.wake_word.setChecked(settings.wake_word_enabled)
+        layout.addWidget(self.wake_word)
+
         # --- Buttons --------------------------------------------------------
         buttons = QHBoxLayout()
         buttons.addStretch(1)
@@ -182,5 +197,8 @@ class SettingsDialog(QDialog):
                 "automation_enabled": self.automation_toggle.isChecked(),
                 "screenshot_logging": self.screenshot_log.isChecked(),
                 "developer_mode": self.developer_mode.isChecked(),
+                "minimize_to_tray": self.minimize_to_tray.isChecked(),
+                "global_hotkey_enabled": self.global_hotkey.isChecked(),
+                "wake_word_enabled": self.wake_word.isChecked(),
             }
         )

@@ -46,7 +46,12 @@ pytest>=8.0
 # pyttsx3>=2.90              # offline TTS (low quality; fallback only)
 # faster-whisper>=1.0        # optional local STT (not wired in this phase)
 
-# --- Wake word (optional, Phase 3) ------------------------------------------
+# --- Desktop integration (Phase 7) ------------------------------------------
+# keyboard>=0.13.5           # OS-wide global hotkey (Ctrl+Shift+J); may need
+#                            # elevated privileges on some systems. Optional -
+#                            # without it, the in-app focus shortcut still works.
+
+# --- Wake word (experimental, disabled by default) --------------------------
 # openwakeword>=0.6
 
 # --- Gmail / Google Calendar (Phase 6) --------------------------------------

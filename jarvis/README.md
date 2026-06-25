@@ -313,11 +313,23 @@ fake LLM provider, no network needed).
 
 ---
 
+## System tray & global hotkey (Phase 7)
+
+- **Minimize to tray:** closing or minimizing the window hides JARVIS to the
+  system tray (toggle in Settings). The tray icon's menu offers *Show JARVIS*,
+  *Hide to tray*, and *Quit*; a single click on the icon summons the window.
+- **Global hotkey Ctrl+Shift+J:** with the optional `keyboard` package
+  installed (`pip install keyboard`), this summons JARVIS even when it's
+  minimized or unfocused. Without it, the in-app `Ctrl+Shift+J` shortcut still
+  works while the window has focus.
+- **Wake word ("Hey JARVIS"):** present only as a **disabled, experimental**
+  setting — there is no always-on microphone in this build.
+
 ## Keyboard
 
-- **Ctrl+Shift+J** — focus the JARVIS input (in-app). A truly global, OS-wide
-  hotkey needs a small platform helper on Windows and is left as a follow-up.
-- **Esc** — emergency stop / cancel the current task.
+- **Ctrl+Shift+J** — summon / focus JARVIS (global if `keyboard` is installed,
+  otherwise in-app).
+- **Esc** — emergency stop / cancel the current task (also interrupts speech).
 
 ---
 

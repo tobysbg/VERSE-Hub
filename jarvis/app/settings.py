@@ -34,6 +34,9 @@ _SETTING_KEYS = [
     "voice_speed",
     "voice_autosend",
     "read_responses_aloud",
+    "minimize_to_tray",
+    "global_hotkey_enabled",
+    "wake_word_enabled",
     "developer_mode",
     "screenshot_logging",
 ]
@@ -77,6 +80,13 @@ class Settings(BaseModel):
     # Read assistant responses aloud. OFF by default (until a good TTS voice is
     # selected) so the poor offline voice isn't forced on the user.
     read_responses_aloud: bool = False
+
+    # --- Desktop integration (Phase 7) ---------------------------------------
+    minimize_to_tray: bool = True
+    global_hotkey_enabled: bool = True
+    # Wake word is an experimental, disabled-by-default feature. It is only ever
+    # active when the user explicitly turns it on AND a local backend exists.
+    wake_word_enabled: bool = False
 
     # --- Developer / advanced ------------------------------------------------
     # When True, "blocked" categories may be attempted (still confirmation-gated).

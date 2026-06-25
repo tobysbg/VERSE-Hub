@@ -16,8 +16,8 @@ import os
 import threading
 from typing import Optional
 
-from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtCore import QEvent, Qt, QThread, Signal
+from PySide6.QtGui import QAction, QColor, QIcon, QKeySequence, QPainter, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -25,8 +25,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QListWidget,
+    QMenu,
     QMessageBox,
     QPushButton,
+    QSystemTrayIcon,
     QTextEdit,
     QVBoxLayout,
     QWidget,
@@ -50,6 +52,7 @@ from ..voice.recorder import AudioRecorder
 from ..voice.stt import get_stt_provider
 from ..voice.tts import get_tts_provider
 from .confirm_dialog import ConfirmationDialog
+from .global_hotkey import GlobalHotkey
 from .hud_widgets import RadarWidget, StatusIndicator, WaveformWidget
 from .settings_dialog import SettingsDialog
 
@@ -183,12 +186,18 @@ class MainWindow(QWidget):
         self._worker: Optional[AgentWorker] = None
         self._voice_worker: Optional[VoiceWorker] = None
         self._tts_worker: Optional[TTSWorker] = None
+        self._tray: Optional[QSystemTrayIcon] = None
+        self._global_hotkey: Optional[GlobalHotkey] = None
+        self._force_quit = False
 
         self.setWindowTitle("JARVIS")
         self.setObjectName("RootBackground")
+        self.setWindowIcon(self._make_icon())
         self.resize(1180, 720)
         self._build_ui()
         self._install_shortcuts()
+        self._setup_tray()
+        self._setup_global_hotkey()
         self._refresh_provider_banner()
         self._log_startup_diagnostics()
 
@@ -590,6 +599,79 @@ class MainWindow(QWidget):
         dlg.setText("\n".join(lines[:60]))
         dlg.exec()
 
+    # -- system tray + global hotkey (Phase 7) -------------------------------
+    def _make_icon(self) -> QIcon:
+        """Procedurally draw an original cyan HUD ring icon (no asset files)."""
+        pix = QPixmap(64, 64)
+        pix.fill(Qt.transparent)
+        painter = QPainter(pix)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(QColor(95, 210, 255))
+        painter.setBrush(QColor(8, 18, 32))
+        painter.drawEllipse(6, 6, 52, 52)
+        painter.setBrush(QColor(95, 210, 255))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(28, 28, 8, 8)
+        painter.end()
+        return QIcon(pix)
+
+    def _setup_tray(self) -> None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        tray = QSystemTrayIcon(self._make_icon(), self)
+        tray.setToolTip("JARVIS")
+        menu = QMenu()
+        show_action = QAction("Show JARVIS", self)
+        show_action.triggered.connect(self._summon)
+        hide_action = QAction("Hide to tray", self)
+        hide_action.triggered.connect(self.hide)
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self._quit_from_tray)
+        menu.addAction(show_action)
+        menu.addAction(hide_action)
+        menu.addSeparator()
+        menu.addAction(quit_action)
+        tray.setContextMenu(menu)
+        tray.activated.connect(self._on_tray_activated)
+        tray.show()
+        self._tray = tray
+
+    def _on_tray_activated(self, reason) -> None:
+        if reason == QSystemTrayIcon.Trigger:  # single click
+            self._summon()
+
+    def _quit_from_tray(self) -> None:
+        self._force_quit = True
+        self.close()
+
+    def _setup_global_hotkey(self) -> None:
+        if not self.settings.global_hotkey_enabled:
+            return
+        hotkey = GlobalHotkey("ctrl+shift+j")
+        hotkey.activated.connect(self._summon)
+        if hotkey.start():
+            self._global_hotkey = hotkey
+        # If unavailable, the in-app Ctrl+Shift+J shortcut still works on focus.
+
+    def _summon(self) -> None:
+        self.showNormal()
+        self.raise_()
+        self.activateWindow()
+        self.chat_input.setFocus()
+
+    def changeEvent(self, event) -> None:  # noqa: N802
+        # Minimizing hides to tray when enabled (and a tray exists).
+        if (
+            event.type() == QEvent.WindowStateChange
+            and self.isMinimized()
+            and self.settings.minimize_to_tray
+            and self._tray is not None
+        ):
+            event.ignore()
+            self.hide()
+            return
+        super().changeEvent(event)
+
     # -- diagnostics ---------------------------------------------------------
     def _log_startup_diagnostics(self) -> None:
         """Log the voice environment at startup so backend issues are obvious.
@@ -612,6 +694,22 @@ class MainWindow(QWidget):
         box.exec()
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        # Closing the window hides to tray (unless the user chose Quit).
+        if (
+            not self._force_quit
+            and self.settings.minimize_to_tray
+            and self._tray is not None
+        ):
+            event.ignore()
+            self.hide()
+            self._tray.showMessage(
+                "JARVIS", "Still running in the tray. Right-click the icon to quit.",
+                QSystemTrayIcon.Information, 2500,
+            )
+            return
+
+        if self._global_hotkey is not None:
+            self._global_hotkey.stop()
         if self._worker and self._worker.isRunning():
             self._worker.agent.request_stop()
             self._worker.provide_confirmation(ConfirmDecision.DENY)
