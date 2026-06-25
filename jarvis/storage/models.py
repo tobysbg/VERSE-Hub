@@ -43,8 +43,10 @@ class AgentStatus(str, enum.Enum):
 
     IDLE = "Idle"
     LISTENING = "Listening"
+    TRANSCRIBING = "Transcribing"
     THINKING = "Thinking"
     ACTING = "Acting"
+    SPEAKING = "Speaking"
     NEEDS_CONFIRMATION = "Needs confirmation"
     ERROR = "Error"
 

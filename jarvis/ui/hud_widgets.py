@@ -129,8 +129,10 @@ class StatusIndicator(QLabel):
     _COLORS = {
         AgentStatus.IDLE: "#4fb8e6",
         AgentStatus.LISTENING: "#43e0a0",
+        AgentStatus.TRANSCRIBING: "#7fe0c0",
         AgentStatus.THINKING: "#ffcf5f",
         AgentStatus.ACTING: "#5fd2ff",
+        AgentStatus.SPEAKING: "#9f8fff",
         AgentStatus.NEEDS_CONFIRMATION: "#ff9f43",
         AgentStatus.ERROR: "#ff5a6e",
     }

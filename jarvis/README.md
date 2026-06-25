@@ -29,7 +29,8 @@ scaffolded as safe, well-typed stubs.
 | Safety layer + confirmation dialog (Allow once / Deny / Always allow) | ✅ working |
 | SQLite logging + Session History panel | ✅ working |
 | Tests (safety, registry, file tools, agent loop) | ✅ working |
-| Voice (push-to-talk STT/TTS, wake word) | 🟡 safe stub |
+| Voice: push-to-talk STT (OpenAI Whisper) + TTS (pyttsx3) | ✅ working (opt-in) |
+| Wake word / always-on mic | ⛔ intentionally not implemented |
 | Browser automation (Playwright) | 🟡 safe stub |
 | Desktop control (click/type/screenshot/OCR/vision) | 🟡 safe stub, OFF by default |
 | Gmail / Google Calendar | 🟡 safe stub |
@@ -128,11 +129,52 @@ python -m jarvis.app.main
 
 Uncomment the relevant groups in `requirements.txt` and install:
 
-- **Desktop automation:** `pip install pyautogui mss` (+ `pywinauto` on Windows)
+- **Voice (push-to-talk):** `pip install sounddevice numpy openai pyttsx3`
+  (Whisper STT uses your `OPENAI_API_KEY`; pyttsx3 is offline TTS). See the
+  Voice section below.
+- **Windows automation** (for `list_open_windows` / `focus_window`):
+  `pip install pygetwindow` (lightweight) **or** `pip install pywinauto pywin32`.
+  If neither is installed, those two tools show a clear setup message and
+  **everything else — chat, file tools, voice — keeps working.**
 - **Browser:** `pip install playwright && playwright install chromium`
-- **Voice (STT):** `pip install faster-whisper sounddevice`
-- **Voice (TTS):** `pip install pyttsx3` (offline) or `edge-tts`
+- **Desktop automation:** `pip install pyautogui mss`
 - **Gmail/Calendar:** `pip install google-api-python-client google-auth-oauthlib`
+
+---
+
+## Voice (Phase 3) — push-to-talk
+
+Voice is **off by default** and never listens on its own — there is no wake word
+and no always-on microphone. Recording happens only while you hold a session
+open with the mic button.
+
+**Enable it (Windows):**
+
+```bat
+cd VERSE-Hub\jarvis
+.venv\Scripts\activate
+pip install sounddevice numpy openai pyttsx3
+```
+
+Then in the app: open **Settings** → tick **Enable voice**, choose
+`openai-whisper` for STT (make sure `OPENAI_API_KEY` is set) and `pyttsx3` for
+TTS. Optionally tick **Auto-send transcription**.
+
+**How it flows:**
+
+1. Click the 🎙 button — JARVIS starts recording (status: **Listening**); the
+   button changes to **■ Stop**.
+2. Click **■ Stop** (or press **Esc**) to finish — JARVIS transcribes the audio
+   (status: **Transcribing**).
+3. The text is placed in the chat input, or sent automatically if
+   *Auto-send transcription* is on.
+4. The assistant responds through the normal agent loop (status: **Thinking** /
+   **Acting**).
+5. If a TTS engine is available, JARVIS reads the reply aloud (status:
+   **Speaking**), then returns to **Idle**.
+
+If the audio backend or API key is missing, JARVIS shows a clear setup message
+instead of failing silently. Voice speed is configurable in Settings.
 
 ---
 
@@ -190,9 +232,10 @@ fake LLM provider, no network needed).
 
 ## What remains (per stubbed phase)
 
-- **Voice:** wire a real STT backend (faster-whisper or Whisper API) and a TTS
-  engine into `voice/stt.py` / `voice/tts.py`; connect push-to-talk capture to
-  the mic button. Interfaces and the waveform animation are already in place.
+- **Voice:** ✅ done — push-to-talk capture (`voice/recorder.py`), OpenAI Whisper
+  STT, and pyttsx3 TTS are wired into the mic button. Still optional/future:
+  a local `faster-whisper` STT backend, Edge/OpenAI TTS voices, and (deliberately
+  deferred) wake-word support.
 - **Browser:** add a Playwright session manager (separate profile) behind the
   existing `browser_tools.py` schemas; enforce the "stop before payment" rule at
   the action layer (already enforced via risk levels + confirmation).

@@ -63,12 +63,12 @@ class SettingsDialog(QDialog):
         form.addRow(self.voice_enabled)
 
         self.stt_box = QComboBox()
-        self.stt_box.addItems(["faster-whisper", "openai-whisper", "disabled"])
+        self.stt_box.addItems(["openai-whisper", "disabled"])
         self.stt_box.setCurrentText(settings.stt_provider)
         form.addRow("STT provider", self.stt_box)
 
         self.tts_box = QComboBox()
-        self.tts_box.addItems(["pyttsx3", "edge-tts", "openai-tts", "disabled"])
+        self.tts_box.addItems(["pyttsx3", "disabled"])
         self.tts_box.setCurrentText(settings.tts_provider)
         form.addRow("TTS provider", self.tts_box)
 
@@ -77,6 +77,10 @@ class SettingsDialog(QDialog):
         self.voice_speed.setSingleStep(0.1)
         self.voice_speed.setValue(settings.voice_speed)
         form.addRow("Voice speed", self.voice_speed)
+
+        self.voice_autosend = QCheckBox("Auto-send transcription (otherwise fills the input)")
+        self.voice_autosend.setChecked(settings.voice_autosend)
+        form.addRow(self.voice_autosend)
 
         layout.addLayout(form)
 
@@ -133,6 +137,7 @@ class SettingsDialog(QDialog):
                 "stt_provider": self.stt_box.currentText(),
                 "tts_provider": self.tts_box.currentText(),
                 "voice_speed": float(self.voice_speed.value()),
+                "voice_autosend": self.voice_autosend.isChecked(),
                 "screen_access_enabled": self.screen_toggle.isChecked(),
                 "automation_enabled": self.automation_toggle.isChecked(),
                 "screenshot_logging": self.screenshot_log.isChecked(),

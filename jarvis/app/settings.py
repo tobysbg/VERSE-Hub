@@ -32,6 +32,7 @@ _SETTING_KEYS = [
     "stt_provider",
     "tts_provider",
     "voice_speed",
+    "voice_autosend",
     "developer_mode",
     "screenshot_logging",
 ]
@@ -54,11 +55,14 @@ class Settings(BaseModel):
     screen_access_enabled: bool = False
     automation_enabled: bool = False
 
-    # --- Voice ---------------------------------------------------------------
+    # --- Voice (disabled by default; push-to-talk only, no wake word) --------
     voice_enabled: bool = False
-    stt_provider: str = "faster-whisper"
+    stt_provider: str = "openai-whisper"
     tts_provider: str = "pyttsx3"
     voice_speed: float = Field(default=1.0, ge=0.5, le=2.0)
+    # When True, a finished transcription is sent automatically; otherwise it is
+    # placed in the chat input for the user to review and send.
+    voice_autosend: bool = False
 
     # --- Developer / advanced ------------------------------------------------
     # When True, "blocked" categories may be attempted (still confirmation-gated).

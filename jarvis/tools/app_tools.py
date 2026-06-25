@@ -15,6 +15,18 @@ from pydantic import BaseModel, Field
 from ..storage.models import RiskLevel
 from .base_tool import BaseTool, EmptyArgs, ToolResult
 
+# Shown when no Windows window-automation backend is installed. This is a
+# clear, actionable setup message (never a bare "tool missing"), and because the
+# imports are lazy, a missing backend cannot break chat, file tools, or voice.
+_WINDOW_DEP_HINT = (
+    "This needs an optional Windows window-automation backend, which isn't "
+    "installed. Install one and try again:\n"
+    "    pip install pygetwindow      (lightweight, recommended)\n"
+    "    pip install pywinauto pywin32 (richer UI automation)\n"
+    "See the 'Windows automation (optional)' section of the README. "
+    "Everything else (chat, file tools, voice) keeps working without it."
+)
+
 # Friendly aliases -> launch command, for common Windows apps.
 _WINDOWS_APP_ALIASES = {
     "notepad": "notepad.exe",
@@ -136,13 +148,30 @@ class FocusWindowTool(BaseTool):
 
     def execute(self, args: FocusWindowArgs) -> ToolResult:
         if sys.platform != "win32":
-            return ToolResult.fail("Window focus is Windows-only (needs pywinauto).")
+            return ToolResult.fail(
+                "Focusing windows is a Windows-only feature. (Chat, file tools, "
+                "and voice are unaffected.)"
+            )
+        # Prefer the lightweight pygetwindow backend if present.
+        try:
+            import pygetwindow as gw  # type: ignore
+
+            matches = [w for w in gw.getWindowsWithTitle(args.window_title)]
+            if matches:
+                win = matches[0]
+                try:
+                    win.activate()
+                except Exception:  # noqa: BLE001 - some windows need restore first
+                    win.minimize()
+                    win.restore()
+                return ToolResult.ok(f"Focused window: {win.title}")
+            return ToolResult.fail(f"No window matching '{args.window_title}' found.")
+        except ImportError:
+            pass
         try:
             from pywinauto import Desktop  # type: ignore
         except ImportError:
-            return ToolResult.fail(
-                "pywinauto is not installed. Run: pip install pywinauto"
-            )
+            return ToolResult.fail(_WINDOW_DEP_HINT)
         try:
             windows = Desktop(backend="uia").windows()
             for w in windows:
@@ -169,13 +198,22 @@ class ListWindowsTool(BaseTool):
 
     def execute(self, args: EmptyArgs) -> ToolResult:
         if sys.platform != "win32":
-            return ToolResult.fail("Listing windows is Windows-only (needs pywinauto).")
+            return ToolResult.fail(
+                "Listing open windows is a Windows-only feature. (Chat, file "
+                "tools, and voice are unaffected.)"
+            )
+        # Prefer the lightweight pygetwindow backend if present.
+        try:
+            import pygetwindow as gw  # type: ignore
+
+            titles = [t for t in gw.getAllTitles() if t and t.strip()]
+            return ToolResult.ok(f"{len(titles)} open window(s).", windows=titles)
+        except ImportError:
+            pass
         try:
             from pywinauto import Desktop  # type: ignore
         except ImportError:
-            return ToolResult.fail(
-                "pywinauto is not installed. Run: pip install pywinauto"
-            )
+            return ToolResult.fail(_WINDOW_DEP_HINT)
         try:
             titles = [
                 w.window_text()

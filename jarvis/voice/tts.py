@@ -17,6 +17,10 @@ class TTSProvider(abc.ABC):
         ...
 
     @abc.abstractmethod
+    def availability_message(self) -> str:
+        """Human-readable reason/instructions when not available (or 'ready')."""
+
+    @abc.abstractmethod
     def speak(self, text: str, speed: float = 1.0) -> bool:
         """Speak text. Returns True if spoken, False if unavailable."""
 
@@ -26,6 +30,12 @@ class DisabledTTS(TTSProvider):
 
     def is_available(self) -> bool:
         return False
+
+    def availability_message(self) -> str:
+        return (
+            "Text-to-speech is not available. Install the offline engine with: "
+            "pip install pyttsx3  (then select 'pyttsx3' in Settings)."
+        )
 
     def speak(self, text: str, speed: float = 1.0) -> bool:
         return False
@@ -42,6 +52,11 @@ class Pyttsx3TTS(TTSProvider):
             return True
         except ImportError:
             return False
+
+    def availability_message(self) -> str:
+        if self.is_available():
+            return "ready"
+        return "The 'pyttsx3' package is not installed. Run: pip install pyttsx3"
 
     def speak(self, text: str, speed: float = 1.0) -> bool:
         try:

@@ -20,9 +20,16 @@ pytest>=8.0
 # works on any OS (including Linux CI). Uncomment the groups you need.
 # ----------------------------------------------------------------------------
 
+# --- Windows automation (optional; needed for list_open_windows /            -
+#     focus_window). Install ONE of these on Windows. If none are present,    -
+#     JARVIS shows a clear setup message and everything else (chat, file      -
+#     tools, voice) keeps working. ----------------------------------------------
+# pygetwindow>=0.0.9 ; sys_platform == "win32"   # lightweight window listing
+# pywinauto>=0.6.8 ; sys_platform == "win32"     # richer UI automation
+# pywin32>=306 ; sys_platform == "win32"         # Win32 APIs (used by pywinauto)
+
 # --- Desktop automation (Phase 5, Windows-first) ----------------------------
 # pyautogui>=0.9.54
-# pywinauto>=0.6.8 ; sys_platform == "win32"
 # mss>=9.0
 # pytesseract>=0.3.10        # OCR for locate_text_on_screen (needs Tesseract)
 
@@ -30,10 +37,12 @@ pytest>=8.0
 # playwright>=1.44           # then run: playwright install chromium
 
 # --- Voice (Phase 3) --------------------------------------------------------
-# faster-whisper>=1.0        # local STT
-# sounddevice>=0.4.6         # microphone capture
-# pyttsx3>=2.90              # offline TTS
-# edge-tts>=6.1              # Microsoft Edge online TTS
+# sounddevice>=0.4.6         # microphone capture (push-to-talk)
+# numpy>=1.24                # audio buffer handling for the recorder
+# openai>=1.30               # OpenAI Whisper speech-to-text (needs OPENAI_API_KEY)
+# pyttsx3>=2.90              # offline text-to-speech (default TTS)
+# faster-whisper>=1.0        # optional local STT (not wired in this phase)
+# edge-tts>=6.1              # optional online TTS (not wired in this phase)
 
 # --- Wake word (optional, Phase 3) ------------------------------------------
 # openwakeword>=0.6

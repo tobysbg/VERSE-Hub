@@ -11,6 +11,7 @@ modal dialog appears on the main thread while the worker waits for the answer.
 """
 from __future__ import annotations
 
+import os
 import threading
 from typing import Optional
 
@@ -43,6 +44,9 @@ from ..llm.factory import get_provider
 from ..storage.database import Database
 from ..storage.models import AgentStatus, MessageRole
 from ..tools.registry import build_default_registry
+from ..voice.recorder import AudioRecorder
+from ..voice.stt import get_stt_provider
+from ..voice.tts import get_tts_provider
 from .confirm_dialog import ConfirmationDialog
 from .hud_widgets import RadarWidget, StatusIndicator, WaveformWidget
 from .settings_dialog import SettingsDialog
@@ -89,6 +93,70 @@ class AgentWorker(QThread):
             self.finished_request.emit()
 
 
+class VoiceWorker(QThread):
+    """Records from the mic (push-to-talk) then transcribes, off the UI thread.
+
+    Recording only happens while this worker runs, and stops the instant
+    ``stop_recording`` is called or the recorder's max duration is reached.
+    """
+
+    status_changed = Signal(object)        # AgentStatus
+    transcription_ready = Signal(str)
+    error = Signal(str)
+
+    def __init__(self, recorder: AudioRecorder, stt) -> None:
+        super().__init__()
+        self.recorder = recorder
+        self.stt = stt
+        self._stop = threading.Event()
+
+    def stop_recording(self) -> None:
+        self._stop.set()
+
+    def run(self) -> None:
+        self.status_changed.emit(AgentStatus.LISTENING)
+        path, err = self.recorder.record(self._stop)
+        if err or not path:
+            self.error.emit(err or "No audio captured.")
+            self.status_changed.emit(AgentStatus.IDLE)
+            return
+
+        self.status_changed.emit(AgentStatus.TRANSCRIBING)
+        try:
+            result = self.stt.transcribe(path)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+        if not result.ok or not result.text.strip():
+            self.error.emit(result.error or "No speech was detected.")
+            self.status_changed.emit(AgentStatus.IDLE)
+            return
+
+        self.transcription_ready.emit(result.text.strip())
+        self.status_changed.emit(AgentStatus.IDLE)
+
+
+class TTSWorker(QThread):
+    """Speaks a piece of text aloud off the UI thread (pyttsx3 blocks)."""
+
+    finished_speaking = Signal()
+
+    def __init__(self, tts, text: str, speed: float) -> None:
+        super().__init__()
+        self.tts = tts
+        self.text = text
+        self.speed = speed
+
+    def run(self) -> None:
+        try:
+            self.tts.speak(self.text, self.speed)
+        finally:
+            self.finished_speaking.emit()
+
+
 class MainWindow(QWidget):
     def __init__(self, db: Database, settings: Settings) -> None:
         super().__init__()
@@ -99,6 +167,8 @@ class MainWindow(QWidget):
         self.memory = ConversationMemory()
         self.session = db.create_session("JARVIS session")
         self._worker: Optional[AgentWorker] = None
+        self._voice_worker: Optional[VoiceWorker] = None
+        self._tts_worker: Optional[TTSWorker] = None
 
         self.setWindowTitle("JARVIS")
         self.setObjectName("RootBackground")
@@ -206,7 +276,10 @@ class MainWindow(QWidget):
         input_row.addWidget(self.chat_input, 1)
 
         self.voice_btn = QPushButton("🎙")
-        self.voice_btn.setToolTip("Push-to-talk (voice input is a stub until enabled in Settings)")
+        self.voice_btn.setToolTip(
+            "Push-to-talk: click to start recording, click again to stop.\n"
+            "Enable voice in Settings first."
+        )
         self.voice_btn.clicked.connect(self._on_voice)
         input_row.addWidget(self.voice_btn)
 
@@ -332,18 +405,83 @@ class MainWindow(QWidget):
         worker = AgentWorker(agent, text)
         worker.status_changed.connect(self._on_status)
         worker.timeline_added.connect(self._on_timeline)
-        worker.assistant_message.connect(lambda m: self._append_chat("JARVIS", m))
+        worker.assistant_message.connect(self._on_assistant_message)
         worker.confirm_needed.connect(self._on_confirm_needed)
         worker.finished_request.connect(self._on_finished)
         self._worker = worker
         worker.start()
 
+    # -- voice input (push-to-talk) ------------------------------------------
     def _on_voice(self) -> None:
-        self._append_chat(
-            "System",
-            "Voice input is a stub in this build. Enable voice in Settings and "
-            "install an STT backend (faster-whisper) to use push-to-talk.",
+        # If a recording is in progress, this click stops it.
+        if self._voice_worker and self._voice_worker.isRunning():
+            self._voice_worker.stop_recording()
+            self.voice_btn.setText("🎙")
+            return
+
+        if not self.settings.voice_enabled:
+            self._append_chat(
+                "System",
+                "Voice is disabled. Open Settings (gear) and tick 'Enable voice' "
+                "to use the microphone.",
+            )
+            return
+        if self._worker and self._worker.isRunning():
+            return  # don't record while the agent is mid-task
+
+        recorder = AudioRecorder()
+        if not recorder.is_available():
+            self._append_chat(
+                "System",
+                "Microphone capture needs the audio backend. Install it with: "
+                "pip install sounddevice numpy",
+            )
+            return
+
+        stt = get_stt_provider(self.settings.stt_provider, self.settings.openai_api_key)
+        if not stt.is_available():
+            self._append_chat("System", stt.availability_message())
+            return
+
+        worker = VoiceWorker(recorder, stt)
+        worker.status_changed.connect(self._on_status)
+        worker.transcription_ready.connect(self._on_transcription)
+        worker.error.connect(lambda e: self._append_chat("System", e))
+        worker.finished.connect(self._on_voice_finished)
+        self._voice_worker = worker
+        self.voice_btn.setText("■ Stop")
+        self.waveform.set_active(True)
+        worker.start()
+
+    def _on_transcription(self, text: str) -> None:
+        self.chat_input.setText(text)
+        if self.settings.voice_autosend:
+            self._on_send()
+        else:
+            self.chat_input.setFocus()
+
+    def _on_voice_finished(self) -> None:
+        self.voice_btn.setText("🎙")
+        self.waveform.set_active(False)
+
+    # -- assistant output / spoken responses ---------------------------------
+    def _on_assistant_message(self, message: str) -> None:
+        self._append_chat("JARVIS", message)
+        self._speak(message)
+
+    def _speak(self, text: str) -> None:
+        if not self.settings.voice_enabled or not text.strip():
+            return
+        tts = get_tts_provider(self.settings.tts_provider)
+        if not tts.is_available():
+            return  # silently skip; voice output is best-effort
+        self.status_indicator.set_status(AgentStatus.SPEAKING)
+        worker = TTSWorker(tts, text, self.settings.voice_speed)
+        worker.finished_speaking.connect(
+            lambda: self.status_indicator.set_status(AgentStatus.IDLE)
         )
+        self._tts_worker = worker
+        worker.start()
 
     def _set_busy(self, busy: bool) -> None:
         self.send_btn.setEnabled(not busy)
@@ -369,13 +507,23 @@ class MainWindow(QWidget):
 
     def _on_finished(self) -> None:
         self._set_busy(False)
+        # If a spoken reply just started, leave the SPEAKING status alone - the
+        # TTS worker resets it to IDLE when it finishes.
+        if self._tts_worker and self._tts_worker.isRunning():
+            return
         self.status_indicator.set_status(AgentStatus.IDLE)
 
     def _emergency_stop(self) -> None:
+        acted = False
         if self._worker and self._worker.isRunning():
             self._worker.agent.request_stop()
             # If we're blocked waiting on a confirmation, deny it to unblock.
             self._worker.provide_confirmation(ConfirmDecision.DENY)
+            acted = True
+        if self._voice_worker and self._voice_worker.isRunning():
+            self._voice_worker.stop_recording()
+            acted = True
+        if acted:
             self._on_timeline("Emergency stop requested.")
 
     # -- settings / history --------------------------------------------------
@@ -413,4 +561,9 @@ class MainWindow(QWidget):
             self._worker.agent.request_stop()
             self._worker.provide_confirmation(ConfirmDecision.DENY)
             self._worker.wait(2000)
+        if self._voice_worker and self._voice_worker.isRunning():
+            self._voice_worker.stop_recording()
+            self._voice_worker.wait(2000)
+        if self._tts_worker and self._tts_worker.isRunning():
+            self._tts_worker.wait(2000)
         event.accept()
